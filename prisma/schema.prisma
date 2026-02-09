@@ -7,4 +7,198 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Models will be added here
+enum Role {
+  ADMIN
+  DIRECTOR
+  OPERATOR
+  ACCOUNTANT
+}
+
+enum CategoryType {
+  STOCK
+  EXPENSE
+}
+
+enum Unit {
+  KG
+  PIECE
+  LITER
+  PACK
+}
+
+enum ProcurementStatus {
+  COMPLETED
+  CANCELLED
+}
+
+enum ProductionStatus {
+  DRAFT
+  COMPLETED
+}
+
+enum PaymentSource {
+  BUSINESS_CASH
+  PERSONAL_FUNDS
+}
+
+model User {
+  id           String       @id @default(uuid())
+  username     String       @unique
+  name         String
+  email        String?      @unique
+  passwordHash String
+  role         Role         @default(OPERATOR)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  productions  Production[]
+  auditLogs    AuditLog[]
+}
+
+model Category {
+  id       String       @id @default(uuid())
+  name     String
+  parentId String?
+  parent   Category?    @relation("SubCategories", fields: [parentId], references: [id])
+  children Category[]   @relation("SubCategories")
+  type     CategoryType @default(STOCK)
+  color    String?      // HEX code
+  products Product[]
+  expenses Expense[]
+}
+
+model Product {
+  id                   String                @id @default(uuid())
+  categoryId           String
+  category             Category              @relation(fields: [categoryId], references: [id])
+  name                 String
+  unit                 Unit
+  minStock             Decimal               @default(0) @db.Decimal(10, 3)
+  currentStock         Decimal               @default(0) @db.Decimal(10, 3)
+  averagePurchasePrice Decimal               @default(0) @db.Decimal(10, 2)
+  image                String?
+  recipes              Recipe[]              @relation("ProductRecipe")
+  ingredients          RecipeIngredient[]
+  procurementItems     ProcurementItem[]
+  productionItems      ProductionItem[]
+  productionMaterials  ProductionMaterial[]
+  saleItems            SaleItem[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+}
+
+model Recipe {
+  id            String             @id @default(uuid())
+  productId     String
+  product       Product            @relation("ProductRecipe", fields: [productId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  expectedYield Decimal            @db.Decimal(5, 2) // Expected yield in %
+  ingredients   RecipeIngredient[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+model RecipeIngredient {
+  id           String  @id @default(uuid())
+  recipeId     String
+  recipe       Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Product @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity     Decimal @db.Decimal(10, 3)
+}
+
+model Procurement {
+  id            String            @id @default(uuid())
+  date          DateTime          @default(now())
+  supplier      String?
+  totalAmount   Decimal           @db.Decimal(12, 2)
+  status        ProcurementStatus @default(COMPLETED)
+  paymentSource PaymentSource     @default(BUSINESS_CASH)
+  isExpensed    Boolean           @default(true)
+  items         ProcurementItem[]
+  createdAt     DateTime          @default(now())
+}
+
+model ProcurementItem {
+  id            String      @id @default(uuid())
+  procurementId String
+  procurement   Procurement @relation(fields: [procurementId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity      Decimal     @db.Decimal(10, 3)
+  pricePerUnit  Decimal     @db.Decimal(10, 2)
+}
+
+model Production {
+  id          String               @id @default(uuid())
+  date        DateTime             @default(now())
+  status      ProductionStatus     @default(COMPLETED)
+  note        String?
+  performedBy String
+  performer   User                 @relation(fields: [performedBy], references: [id])
+  items       ProductionItem[]
+  materials   ProductionMaterial[]
+}
+
+model ProductionItem {
+  id                    String     @id @default(uuid())
+  productionId          String
+  production            Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  productId             String
+  product               Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityProduced      Decimal    @db.Decimal(10, 3)
+  calculatedCostPerUnit Decimal    @db.Decimal(10, 2)
+}
+
+model ProductionMaterial {
+  id           String     @id @default(uuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityUsed Decimal    @db.Decimal(10, 3)
+}
+
+model Sale {
+  id           String     @id @default(uuid())
+  date         DateTime   @default(now())
+  totalRevenue Decimal    @db.Decimal(12, 2)
+  customer     String?
+  items        SaleItem[]
+}
+
+model SaleItem {
+  id           String  @id @default(uuid())
+  saleId       String
+  sale         Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity     Decimal @db.Decimal(10, 3)
+  pricePerUnit Decimal @db.Decimal(10, 2)
+}
+
+model Expense {
+  id            String        @id @default(uuid())
+  categoryId    String
+  category      Category      @relation(fields: [categoryId], references: [id])
+  name          String
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentSource PaymentSource @default(BUSINESS_CASH)
+  date          DateTime      @default(now())
+  description   String?
+}
+
+model SystemSetting {
+  key         String  @id
+  value       String
+  description String?
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  details   String?  // JSON or string details of the action
+}
