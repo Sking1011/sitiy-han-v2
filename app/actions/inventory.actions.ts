@@ -71,6 +71,11 @@ export async function deleteProductAction(id: string) {
   revalidatePath("/inventory")
 }
 
+export async function getProductHistoryAction(productId: string) {
+  const history = await InventoryService.getProductHistory(productId)
+  return serializeEntity(history)
+}
+
 export async function searchProductsAction(query: string) {
   const products = await InventoryService.getProducts({ search: query })
   return serializeEntity(products)

@@ -53,7 +53,7 @@ export function LoginForm() {
           Введите ваши данные для доступа к ERP "Сити Хан"
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} suppressHydrationWarning>
         <CardContent className="space-y-4">
           {error && (
             <Alert variant="destructive">
@@ -70,6 +70,7 @@ export function LoginForm() {
               onChange={(e) => setUsername(e.target.value)}
               required
               disabled={isLoading}
+              suppressHydrationWarning
             />
           </div>
           <div className="space-y-2">
@@ -81,6 +82,7 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
+              suppressHydrationWarning
             />
           </div>
         </CardContent>

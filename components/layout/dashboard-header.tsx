@@ -17,7 +17,11 @@ export function DashboardHeader() {
       <div className="flex items-center flex-1 gap-4">
         <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Быстрый поиск по системе..." className="pl-9 bg-muted/50 border-none" />
+            <Input 
+              placeholder="Быстрый поиск по системе..." 
+              className="pl-9 bg-muted/50 border-none" 
+              suppressHydrationWarning
+            />
         </div>
       </div>
 

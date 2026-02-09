@@ -213,19 +213,571 @@ export class InventoryService {
 
   
 
-        static async deleteProduct(id: string) {
+          static async deleteProduct(id: string) {
 
   
 
-          return prisma.product.delete({
+      
 
   
 
-            where: { id }
+            return prisma.product.delete({
 
   
 
-          });
+      
+
+  
+
+              where: { id }
+
+  
+
+      
+
+  
+
+            });
+
+  
+
+      
+
+  
+
+          }
+
+  
+
+      
+
+  
+
+        
+
+  
+
+      
+
+  
+
+          static async getProductHistory(productId: string) {
+
+  
+
+      
+
+  
+
+            const [procurements, sales, productionUsage, productionOutput] = await Promise.all([
+
+  
+
+      
+
+  
+
+              prisma.procurementItem.findMany({
+
+  
+
+      
+
+  
+
+                where: { productId },
+
+  
+
+      
+
+  
+
+                include: { procurement: { include: { user: true } } },
+
+  
+
+      
+
+  
+
+                orderBy: { procurement: { date: "desc" } }
+
+  
+
+      
+
+  
+
+              }),
+
+  
+
+      
+
+  
+
+              prisma.saleItem.findMany({
+
+  
+
+      
+
+  
+
+                where: { productId },
+
+  
+
+      
+
+  
+
+                include: { sale: { include: { user: true } } },
+
+  
+
+      
+
+  
+
+                orderBy: { sale: { date: "desc" } }
+
+  
+
+      
+
+  
+
+              }),
+
+  
+
+      
+
+  
+
+              prisma.productionMaterial.findMany({
+
+  
+
+      
+
+  
+
+                where: { productId },
+
+  
+
+      
+
+  
+
+                include: { production: { include: { performer: true } } },
+
+  
+
+      
+
+  
+
+                orderBy: { production: { date: "desc" } }
+
+  
+
+      
+
+  
+
+              }),
+
+  
+
+      
+
+  
+
+              prisma.productionItem.findMany({
+
+  
+
+      
+
+  
+
+                where: { productId },
+
+  
+
+      
+
+  
+
+                include: { production: { include: { performer: true } } },
+
+  
+
+      
+
+  
+
+                orderBy: { production: { date: "desc" } }
+
+  
+
+      
+
+  
+
+              })
+
+  
+
+      
+
+  
+
+            ]);
+
+  
+
+      
+
+  
+
+        
+
+  
+
+      
+
+  
+
+            const history = [
+
+  
+
+      
+
+  
+
+              ...procurements.map(p => ({
+
+  
+
+      
+
+  
+
+                id: p.id,
+
+  
+
+      
+
+  
+
+                date: p.procurement.date,
+
+  
+
+      
+
+  
+
+                type: "PROCUREMENT" as const,
+
+  
+
+      
+
+  
+
+                quantity: Number(p.quantity),
+
+  
+
+      
+
+  
+
+                price: Number(p.pricePerUnit),
+
+  
+
+      
+
+  
+
+                total: Number(p.quantity) * Number(p.pricePerUnit),
+
+  
+
+      
+
+  
+
+                counterparty: p.procurement.supplier || "Поставщик",
+
+  
+
+      
+
+  
+
+                performedBy: p.procurement.user?.name || "Система"
+
+  
+
+      
+
+  
+
+              })),
+
+  
+
+      
+
+  
+
+              ...sales.map(s => ({
+
+  
+
+      
+
+  
+
+                id: s.id,
+
+  
+
+      
+
+  
+
+                date: s.sale.date,
+
+  
+
+      
+
+  
+
+                type: "SALE" as const,
+
+  
+
+      
+
+  
+
+                quantity: -Number(s.quantity),
+
+  
+
+      
+
+  
+
+                price: Number(s.pricePerUnit),
+
+  
+
+      
+
+  
+
+                total: Number(s.quantity) * Number(s.pricePerUnit),
+
+  
+
+      
+
+  
+
+                counterparty: s.sale.customer || "Клиент",
+
+  
+
+      
+
+  
+
+                performedBy: s.sale.user?.name || "Система"
+
+  
+
+      
+
+  
+
+              })),
+
+  
+
+      
+
+  
+
+              ...productionUsage.map(pm => ({
+
+  
+
+      
+
+  
+
+                id: pm.id,
+
+  
+
+      
+
+  
+
+                date: pm.production.date,
+
+  
+
+      
+
+  
+
+                type: "PRODUCTION_USAGE" as const,
+
+  
+
+      
+
+  
+
+                quantity: -Number(pm.quantityUsed),
+
+  
+
+      
+
+  
+
+                counterparty: "Цех (списание)",
+
+  
+
+      
+
+  
+
+                performedBy: pm.production.performer.name
+
+  
+
+      
+
+  
+
+              })),
+
+  
+
+      
+
+  
+
+              ...productionOutput.map(pi => ({
+
+  
+
+      
+
+  
+
+                id: pi.id,
+
+  
+
+      
+
+  
+
+                date: pi.production.date,
+
+  
+
+      
+
+  
+
+                type: "PRODUCTION_OUTPUT" as const,
+
+  
+
+      
+
+  
+
+                quantity: Number(pi.quantityProduced),
+
+  
+
+      
+
+  
+
+                counterparty: "Цех (выпуск)",
+
+  
+
+      
+
+  
+
+                performedBy: pi.production.performer.name
+
+  
+
+      
+
+  
+
+              }))
+
+  
+
+      
+
+  
+
+            ];
+
+  
+
+      
+
+  
+
+        
+
+  
+
+      
+
+  
+
+            return history.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  
+
+      
+
+  
+
+          }
+
+  
+
+      
 
   
 
@@ -233,7 +785,11 @@ export class InventoryService {
 
   
 
-      }
+      
+
+  
+
+        
 
   
 

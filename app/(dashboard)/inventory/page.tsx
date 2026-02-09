@@ -49,6 +49,7 @@ export default async function InventoryPage(props: {
               placeholder="Поиск товара..." 
               className="pl-9 h-11 bg-card"
               defaultValue={searchParams.q}
+              suppressHydrationWarning
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">

@@ -70,7 +70,7 @@ const navItems: NavItem[] = [
   },
   {
     title: "Бухгалтерия",
-    href: "/finance",
+    href: "/accounting",
     icon: BarChart3,
     roles: [Role.ADMIN, Role.DIRECTOR, Role.ACCOUNTANT],
   },

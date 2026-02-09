@@ -6,6 +6,7 @@ export class ProcurementService {
   static async createProcurement(data: {
     supplier?: string;
     paymentSource: PaymentSource;
+    userId?: string;
     items: {
       productId: string;
       quantity: number;
@@ -24,6 +25,7 @@ export class ProcurementService {
         data: {
           supplier: data.supplier,
           paymentSource: data.paymentSource,
+          userId: data.userId,
           totalAmount: new Prisma.Decimal(totalAmount),
           status: ProcurementStatus.COMPLETED,
           items: {

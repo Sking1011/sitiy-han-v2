@@ -33,6 +33,34 @@ export function formatUnit(value: number | string | DecimalValue, unit: Unit): s
   }
 }
 
+/**
+ * Форматирование валюты (KZT)
+ */
+export function formatCurrency(amount: number | string): string {
+  const value = typeof amount === "string" ? parseFloat(amount) : Number(amount)
+  
+  return new Intl.NumberFormat("ru-KZ", {
+    style: "currency",
+    currency: "KZT",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+/**
+ * Форматирование даты
+ */
+export function formatDate(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date
+  return d.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 interface DecimalValue {
     toNumber: () => number
 }

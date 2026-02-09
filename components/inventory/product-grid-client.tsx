@@ -15,10 +15,11 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { ProductDialog } from "./product-dialog"
+import { ProductHistoryDialog } from "./product-history-dialog"
 
 interface ProductWithData extends Product {
-    category: Category
-    procurementItems: any[]
+  category: Category
+  procurementItems: any[]
 }
 
 interface ProductGridClientProps {
@@ -29,10 +30,17 @@ interface ProductGridClientProps {
 export function ProductGridClient({ products, categories }: ProductGridClientProps) {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [historyProduct, setHistoryProduct] = useState<Product | null>(null)
 
   const handleEdit = (product: Product) => {
     setSelectedProduct(product)
     setIsDialogOpen(true)
+  }
+
+  const handleShowHistory = (product: Product) => {
+    setHistoryProduct(product)
+    setIsHistoryOpen(true)
   }
 
   const handleOpenChange = (open: boolean) => {
@@ -117,10 +125,12 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
                     </div>
                 </div>
 
-                <Button variant="secondary" className="w-full h-8 text-xs gap-1" asChild>
-                    <Link href={`/inventory/${product.id}/history`}>
-                        История движения <ArrowUpRight className="h-3 w-3" />
-                    </Link>
+                <Button 
+                    variant="secondary" 
+                    className="w-full h-8 text-xs gap-1"
+                    onClick={() => handleShowHistory(product)}
+                >
+                    История движения <ArrowUpRight className="h-3 w-3" />
                 </Button>
               </CardContent>
             </Card>
@@ -133,6 +143,12 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
         categories={categories}
         open={isDialogOpen}
         onOpenChange={handleOpenChange}
+      />
+
+      <ProductHistoryDialog 
+        product={historyProduct}
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
       />
     </>
   )

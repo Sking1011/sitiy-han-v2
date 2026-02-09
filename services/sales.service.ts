@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 export class SalesService {
   static async createSale(data: {
     customer?: string;
+    userId?: string;
     items: {
       productId: string;
       quantity: number;
@@ -20,6 +21,7 @@ export class SalesService {
       const sale = await tx.sale.create({
         data: {
           customer: data.customer,
+          userId: data.userId,
           totalRevenue: new Prisma.Decimal(totalRevenue),
           items: {
             create: data.items.map((item) => ({
