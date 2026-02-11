@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TrendingUp, Wallet, ArrowDownCircle, ArrowUpCircle } from "lucide-react"
 import { DashboardService } from "@/services/dashboard.service"
 
+export const dynamic = "force-dynamic"
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
   const stats = await DashboardService.getStats()

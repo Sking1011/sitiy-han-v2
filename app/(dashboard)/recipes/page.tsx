@@ -7,6 +7,8 @@ import { Plus } from "lucide-react"
 import { RecipeDialogWrapper } from "@/components/recipes/recipe-dialog-wrapper"
 import { Role } from "@prisma/client"
 
+export const dynamic = "force-dynamic"
+
 export default async function RecipesPage() {
   const session = await getServerSession(authOptions)
   const recipes = await getRecipesAction()

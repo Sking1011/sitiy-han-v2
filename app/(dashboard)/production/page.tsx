@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth"
 import { getProductionInitialData, getProductionHistoryAction } from "@/app/actions/production.actions"
 import { ProductionClient } from "@/components/production/production-client"
 
+export const dynamic = "force-dynamic"
+
 export default async function ProductionPage() {
   const session = await getServerSession(authOptions)
   const { materials, recipes } = await getProductionInitialData()

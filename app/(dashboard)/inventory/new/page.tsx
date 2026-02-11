@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ProductForm } from "@/components/inventory/product-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewProductPage() {
   const categories = await InventoryService.getCategories();
 
