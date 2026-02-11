@@ -5,6 +5,8 @@ import { ExportData } from "@/components/settings/export-data"
 import { getUsers } from "@/app/actions/user.actions"
 import { AuditService } from "@/services/audit.service"
 
+export const dynamic = "force-dynamic"
+
 export default function SettingsPage() {
   // We don't use await here if we want to stream, but for now let's keep it simple
   // Actually, getUsers and getLogs are async
