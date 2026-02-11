@@ -22,7 +22,7 @@ export default function DashboardLayout({
         <header className="lg:hidden flex h-14 items-center justify-between border-b px-6 bg-card flex-shrink-0">
           <div className="flex items-center gap-2 font-bold text-lg">
             <ChefHat className="h-5 w-5 text-primary" />
-            <span>Сити Хан</span>
+            <span>Сытый Хан</span>
           </div>
           <ModeToggle />
         </header>

@@ -4,6 +4,8 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { CategoryListClient } from "@/components/inventory/category-list-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function CategoriesPage() {
   const categories = await InventoryService.getCategories();
 

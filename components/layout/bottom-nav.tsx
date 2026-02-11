@@ -118,7 +118,7 @@ export function MobileMenu() {
         <SheetHeader className="text-left pb-6">
           <SheetTitle className="flex items-center gap-2">
             <ChefHat className="h-6 w-6 text-primary" />
-            Сити Хан
+            Сытый Хан
           </SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-2">

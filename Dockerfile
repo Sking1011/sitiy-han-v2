@@ -4,11 +4,11 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
-RUN 
-  if [ -f row-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; 
-  elif [ -f package-lock.json ]; then npm ci; 
-  elif [ -f yarn.lock ]; then yarn --frozen-lockfile; 
-  else echo "Lockfile not found." && exit 1; 
+RUN \
+  if [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  else echo "Lockfile not found." && exit 1; \
   fi
 
 # Stage 2: Build the application
@@ -17,8 +17,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Генерируем Prisma Client
+RUN npx prisma generate
+
 # Отключаем телеметрию Next.js во время сборки
 ENV NEXT_TELEMETRY_DISABLED 1
+# Передаем пустую или фейковую БД для этапа билда
+ENV DATABASE_URL=postgresql://postgres:password@localhost:5432/db?schema=public
 
 RUN npm run build
 
@@ -29,10 +34,12 @@ WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
+RUN apk add --no-cache openssl libc6-compat
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+# COPY --from=builder /app/public ./public
 
 # Настройка кеша и прав доступа
 RUN mkdir .next
@@ -41,6 +48,7 @@ RUN chown nextjs:nodejs .next
 # Копируем результат сборки (Standalone mode)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs
 

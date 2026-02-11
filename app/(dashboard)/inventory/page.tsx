@@ -3,12 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
     Plus, 
-    Search, 
     Package, 
 } from "lucide-react";
 import Link from "next/link";
 import { ProductGridClient } from "@/components/inventory/product-grid-client";
+import { InventoryFilters } from "@/components/inventory/inventory-filters";
 import { serializeEntity } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 export default async function InventoryPage(props: {
   searchParams: Promise<{ q?: string; category?: string }>;
@@ -41,26 +43,8 @@ export default async function InventoryPage(props: {
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-              placeholder="Поиск товара..." 
-              className="pl-9 h-11 bg-card"
-              defaultValue={searchParams.q}
-              suppressHydrationWarning
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-            <Button variant="secondary" size="sm" className="whitespace-nowrap">Все</Button>
-            {categories.map(cat => (
-                <Button key={cat.id} variant="outline" size="sm" className="whitespace-nowrap">
-                    {cat.name}
-                </Button>
-            ))}
-        </div>
-      </div>
+      {/* Filters & Search (Client Side) */}
+      <InventoryFilters categories={serializeEntity(categories)} />
 
       {/* Tiles Grid (Client Side) */}
       <ProductGridClient 

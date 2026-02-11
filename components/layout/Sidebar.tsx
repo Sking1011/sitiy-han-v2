@@ -102,7 +102,7 @@ export function Sidebar() {
       <div className="p-6">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
           <ChefHat className="h-6 w-6 text-primary" />
-          <span>Сити Хан</span>
+          <span>Сытый Хан</span>
         </Link>
       </div>
 

@@ -50,7 +50,7 @@ export function LoginForm() {
       <CardHeader className="space-y-1">
         <CardTitle className="text-2xl text-center">Вход в систему</CardTitle>
         <CardDescription className="text-center">
-          Введите ваши данные для доступа к ERP "Сити Хан"
+          Введите ваши данные для доступа к ERP "Сытый Хан"
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit} suppressHydrationWarning>
