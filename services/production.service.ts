@@ -9,9 +9,19 @@ export class ProductionService {
           select: {
             id: true,
             name: true,
-            parentId: true
+            parentId: true,
+            isFinished: true
           }
-        } 
+        },
+        batches: {
+            where: { remainingQuantity: { gt: 0 } },
+            orderBy: { createdAt: 'asc' },
+            include: {
+                procurementItem: {
+                    include: { procurement: { select: { supplier: true, date: true } } }
+                }
+            }
+        }
       },
       orderBy: { name: 'asc' }
     });
@@ -20,6 +30,14 @@ export class ProductionService {
         averagePurchasePrice: Number(p.averagePurchasePrice),
         currentStock: Number(p.currentStock),
         minStock: Number(p.minStock),
+        batches: p.batches.map(b => ({
+            ...b,
+            initialQuantity: Number(b.initialQuantity),
+            remainingQuantity: Number(b.remainingQuantity),
+            pricePerUnit: Number(b.pricePerUnit),
+            supplier: b.procurementItem?.procurement?.supplier,
+            date: b.procurementItem?.procurement?.date || b.createdAt
+        }))
     }));
   }
 
@@ -51,7 +69,7 @@ export class ProductionService {
   static async createProduction(data: {
     performedBy: string;
     items: { productId: string; quantityProduced: number; calculatedCostPerUnit: number }[];
-    materials: { productId: string; quantityUsed: number }[];
+    materials: { productId: string; quantityUsed: number; batchId?: string }[];
     initialWeight?: number;
     finalWeight?: number;
     prepTime?: number;
@@ -86,34 +104,16 @@ export class ProductionService {
           materials: {
             create: data.materials.map(mat => ({
               productId: mat.productId,
-              quantityUsed: new Prisma.Decimal(mat.quantityUsed)
+              quantityUsed: new Prisma.Decimal(mat.quantityUsed),
+              batchId: mat.batchId
             }))
           }
-        }
+        },
+        include: { items: true }
       });
 
-      // 2. Update Stocks and Prices if COMPLETED
       if (production.status === ProductionStatus.COMPLETED) {
-          // Subtract materials from stock
-          for (const mat of data.materials) {
-            await tx.product.update({
-              where: { id: mat.productId },
-              data: {
-                currentStock: { decrement: new Prisma.Decimal(mat.quantityUsed) }
-              }
-            });
-          }
-
-          // Add items to stock and update averagePurchasePrice (as cost price)
-          for (const item of data.items) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: {
-                currentStock: { increment: new Prisma.Decimal(item.quantityProduced) },
-                averagePurchasePrice: new Prisma.Decimal(item.calculatedCostPerUnit)
-              }
-            });
-          }
+          await this.processProductionCompletion(tx, production, data.materials);
       }
 
       return production;
@@ -130,6 +130,7 @@ export class ProductionService {
     boilingTime?: number;
     totalCost?: number;
     items?: { productId: string; quantityProduced: number; calculatedCostPerUnit: number }[];
+    materials?: { productId: string; quantityUsed: number; batchId?: string }[];
   }) {
     return prisma.$transaction(async (tx) => {
       const current = await tx.production.findUnique({
@@ -139,6 +140,7 @@ export class ProductionService {
 
       if (!current) throw new Error("Production not found");
 
+      // Update basic fields
       const updated = await tx.production.update({
         where: { id },
         data: {
@@ -150,55 +152,107 @@ export class ProductionService {
           smokingTime: data.smokingTime,
           boilingTime: data.boilingTime,
           totalCost: data.totalCost ? new Prisma.Decimal(data.totalCost) : undefined,
-        }
+        },
+        include: { items: true, materials: true }
       });
 
-      // Logic for transitioning from IN_PROGRESS to COMPLETED
+      // Transition to COMPLETED
       if (current.status !== ProductionStatus.COMPLETED && data.status === ProductionStatus.COMPLETED) {
-        // Subtract materials
-        for (const mat of current.materials) {
-          await tx.product.update({
-            where: { id: mat.productId },
-            data: {
-              currentStock: { decrement: mat.quantityUsed }
-            }
-          });
-        }
-
-        // Add items (and update items if provided in data)
-        const itemsToProcess = data.items || current.items.map(i => ({
-            productId: i.productId,
-            quantityProduced: Number(i.quantityProduced),
-            calculatedCostPerUnit: Number(i.calculatedCostPerUnit)
-        }));
-
-        for (const item of itemsToProcess) {
-            await tx.product.update({
-                where: { id: item.productId },
-                data: {
-                    currentStock: { increment: new Prisma.Decimal(item.quantityProduced) },
-                    averagePurchasePrice: new Prisma.Decimal(item.calculatedCostPerUnit)
-                }
-            });
-            
-            // If items were updated, update ProductionItem record
-            if (data.items) {
-                const existingItem = current.items.find(i => i.productId === item.productId);
-                if (existingItem) {
-                    await tx.productionItem.update({
-                        where: { id: existingItem.id },
-                        data: {
-                            quantityProduced: new Prisma.Decimal(item.quantityProduced),
-                            calculatedCostPerUnit: new Prisma.Decimal(item.calculatedCostPerUnit)
-                        }
-                    });
-                }
-            }
-        }
+          // If materials were updated in the form, use them, otherwise use from DB
+          const materialsToDeduct = data.materials || current.materials.map(m => ({
+              productId: m.productId,
+              quantityUsed: Number(m.quantityUsed),
+              batchId: m.batchId || undefined
+          }));
+          
+          await this.processProductionCompletion(tx, updated, materialsToDeduct);
       }
 
       return updated;
     });
+  }
+
+  /**
+   * Вспомогательный метод для обработки завершения производства:
+   * 1. Списание сырья (Product + Batches FIFO)
+   * 2. Приход готовой продукции (Product + New Batch)
+   */
+  private static async processProductionCompletion(tx: any, production: any, materials: any[]) {
+      // 1. Списание сырья
+      for (const mat of materials) {
+          const qty = Number(mat.quantityUsed);
+          
+          // Уменьшаем общий остаток товара
+          await tx.product.update({
+              where: { id: mat.productId },
+              data: { currentStock: { decrement: new Prisma.Decimal(qty) } }
+          });
+
+          if (mat.batchId) {
+              // Списание с конкретной партии
+              await tx.batch.update({
+                  where: { id: mat.batchId },
+                  data: { remainingQuantity: { decrement: new Prisma.Decimal(qty) } }
+              });
+          } else {
+              // FIFO Списание
+              let remainingToDeduct = qty;
+              const batches = await tx.batch.findMany({
+                  where: { productId: mat.productId, remainingQuantity: { gt: 0 } },
+                  orderBy: { createdAt: 'asc' }
+              });
+
+              for (const batch of batches) {
+                  if (remainingToDeduct <= 0) break;
+                  const available = Number(batch.remainingQuantity);
+                  const toTake = Math.min(available, remainingToDeduct);
+                  
+                  await tx.batch.update({
+                      where: { id: batch.id },
+                      data: { remainingQuantity: { decrement: new Prisma.Decimal(toTake) } }
+                  });
+                  remainingToDeduct -= toTake;
+              }
+          }
+      }
+
+      // 2. Приход готовой продукции
+      for (const item of production.items) {
+          const product = await tx.product.findUnique({ where: { id: item.productId } });
+          if (!product) continue;
+
+          const producedQty = Number(item.quantityProduced);
+          const producedCost = Number(item.calculatedCostPerUnit);
+
+          // Обновляем среднюю цену (справочно)
+          const currentStock = Number(product.currentStock);
+          const currentAvgPrice = Number(product.averagePurchasePrice);
+          let newAvgPrice = producedCost;
+          const totalQty = currentStock + producedQty;
+          if (totalQty > 0) {
+              newAvgPrice = ((currentStock * currentAvgPrice) + (producedQty * producedCost)) / totalQty;
+          }
+
+          await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                  currentStock: { increment: new Prisma.Decimal(producedQty) },
+                  averagePurchasePrice: new Prisma.Decimal(newAvgPrice)
+              }
+          });
+
+          // Создаем уникальную Партию для этого выпуска
+          // Используем create, так как при переходе в COMPLETED партии еще не должно быть
+          await tx.batch.create({
+              data: {
+                  productId: item.productId,
+                  productionItemId: item.id,
+                  initialQuantity: new Prisma.Decimal(producedQty),
+                  remainingQuantity: new Prisma.Decimal(producedQty),
+                  pricePerUnit: new Prisma.Decimal(producedCost)
+              }
+          });
+      }
   }
 
   static async getProductionHistory() {

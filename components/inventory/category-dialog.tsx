@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { Category, CategoryType } from "@prisma/client"
 import { createCategoryAction, updateCategoryAction } from "@/app/actions/inventory.actions"
@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2 } from "lucide-react"
 
 interface CategoryDialogProps {
@@ -42,22 +43,33 @@ export function CategoryDialog({ category, open, onOpenChange }: CategoryDialogP
 
   const form = useForm({
     defaultValues: {
-      name: category?.name || "",
-      type: category?.type || CategoryType.STOCK,
-      color: category?.color || "#3b82f6",
+      name: "",
+      type: CategoryType.STOCK,
+      color: "#3b82f6",
+      isFinished: false,
     },
   })
 
-  // Update form when category changes
-  useState(() => {
-    if (category) {
+  // Update form when category changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      if (category) {
         form.reset({
-            name: category.name,
-            type: category.type,
-            color: category.color || "#3b82f6",
+          name: category.name,
+          type: category.type,
+          color: category.color || "#3b82f6",
+          isFinished: (category as any).isFinished || false,
         })
+      } else {
+        form.reset({
+          name: "",
+          type: CategoryType.STOCK,
+          color: "#3b82f6",
+          isFinished: false,
+        })
+      }
     }
-  })
+  }, [category, open, form])
 
   async function onSubmit(values: any) {
     setIsLoading(true)
@@ -75,6 +87,8 @@ export function CategoryDialog({ category, open, onOpenChange }: CategoryDialogP
       setIsLoading(false)
     }
   }
+
+  const categoryType = form.watch("type")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,6 +141,32 @@ export function CategoryDialog({ category, open, onOpenChange }: CategoryDialogP
                 </FormItem>
               )}
             />
+            
+            {categoryType === CategoryType.STOCK && (
+              <FormField
+                control={form.control}
+                name="isFinished"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>
+                        Это готовая продукция
+                      </FormLabel>
+                      <p className="text-sm text-muted-foreground">
+                        Отметьте, если в этой категории будут храниться товары собственного производства (на продажу).
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="color"

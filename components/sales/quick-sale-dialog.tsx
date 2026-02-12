@@ -50,7 +50,9 @@ export function QuickSaleDialog({ open, onOpenChange }: { open: boolean, onOpenC
   const handleSelectProduct = (p: any) => {
     setSelectedProduct(p)
     setError(null)
-    setPrice("") 
+    // Auto-fill selling price if set, otherwise leave empty for manual entry
+    const sPrice = Number(p.sellingPrice)
+    setPrice(sPrice > 0 ? sPrice.toString() : "") 
     setStep(2)
   }
 
@@ -228,11 +230,11 @@ export function QuickSaleDialog({ open, onOpenChange }: { open: boolean, onOpenC
                       />
                   </div>
                   <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase text-muted-foreground">Цена продажи (₸)</Label>
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground">Цена продажи (₸/кг)</Label>
                       <Input 
                           type="text" 
                           inputMode="numeric"
-                          className="h-14 text-xl font-bold" 
+                          className="h-14 text-xl font-bold border-primary/20" 
                           value={price}
                           onChange={(e) => setPrice(e.target.value)}
                           autoComplete="no"

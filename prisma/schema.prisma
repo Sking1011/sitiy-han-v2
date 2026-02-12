@@ -55,6 +55,8 @@ model User {
   procurements Procurement[] @relation("UserProcurements")
   sales        Sale[]        @relation("UserSales")
   expenses     Expense[]     @relation("UserExpenses")
+  disposals    Disposal[]
+  merges       BatchMerge[]
   auditLogs    AuditLog[]
 }
 
@@ -65,6 +67,7 @@ model Category {
   parent   Category?    @relation("SubCategories", fields: [parentId], references: [id])
   children Category[]   @relation("SubCategories")
   type     CategoryType @default(STOCK)
+  isFinished Boolean    @default(false) // True for Finished Goods categories
   color    String?      // HEX code
   products Product[]
   expenses Expense[]
@@ -79,14 +82,56 @@ model Product {
   minStock             Decimal               @default(0) @db.Decimal(10, 3)
   currentStock         Decimal               @default(0) @db.Decimal(10, 3)
   averagePurchasePrice Decimal               @default(0) @db.Decimal(10, 2)
+  sellingPrice         Decimal               @default(0) @db.Decimal(10, 2) // Fixed selling price
   image                String?
   ingredients          RecipeIngredient[]
   procurementItems     ProcurementItem[]
   productionItems      ProductionItem[]
   productionMaterials  ProductionMaterial[]
   saleItems            SaleItem[]
+  disposals            Disposal[]
+  batches              Batch[]
+  merges               BatchMerge[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
+}
+
+model Batch {
+  id                String    @id @default(uuid())
+  productId         String
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  procurementItemId String?   @unique
+  procurementItem   ProcurementItem? @relation(fields: [procurementItemId], references: [id])
+  
+  productionItemId  String?   @unique
+  productionItem    ProductionItem? @relation(fields: [productionItemId], references: [id])
+  
+  initialQuantity   Decimal   @db.Decimal(10, 3)
+  remainingQuantity Decimal   @db.Decimal(10, 3)
+  pricePerUnit      Decimal   @db.Decimal(10, 2)
+  
+  productionMaterials ProductionMaterial[]
+  disposals           Disposal[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model BatchMerge {
+  id                String   @id @default(uuid())
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  sourceInfo        String   // Описание исходной партии
+  targetInfo        String   // Описание целевой партии
+  targetBatchId     String
+  
+  quantityMerged    Decimal  @db.Decimal(10, 3)
+  priceAtMerge      Decimal  @db.Decimal(10, 2)
+  
+  date              DateTime @default(now())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
 }
 
 model Recipe {
@@ -130,6 +175,7 @@ model ProcurementItem {
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   quantity      Decimal     @db.Decimal(10, 3)
   pricePerUnit  Decimal     @db.Decimal(10, 2)
+  batch         Batch?
 }
 
 model Production {
@@ -160,6 +206,7 @@ model ProductionItem {
   product               Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   quantityProduced      Decimal    @db.Decimal(10, 3)
   calculatedCostPerUnit Decimal    @db.Decimal(10, 2)
+  batch                 Batch?
 }
 
 model ProductionMaterial {
@@ -168,6 +215,8 @@ model ProductionMaterial {
   production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
   productId    String
   product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchId      String?
+  batch        Batch?     @relation(fields: [batchId], references: [id])
   quantityUsed Decimal    @db.Decimal(10, 3)
 }
 
@@ -217,4 +266,17 @@ model AuditLog {
   user      User     @relation(fields: [userId], references: [id])
   action    String
   details   String?  // JSON or string details of the action
+}
+
+model Disposal {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchId     String?
+  batch       Batch?   @relation(fields: [batchId], references: [id])
+  quantity    Decimal  @db.Decimal(10, 3)
+  reason      String?
+  date        DateTime @default(now())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
 }

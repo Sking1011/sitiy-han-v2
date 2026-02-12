@@ -20,7 +20,7 @@ export async function getProductionInitialData() {
 export async function createProductionAction(data: {
   performedBy: string;
   items: { productId: string; quantityProduced: number; calculatedCostPerUnit: number }[];
-  materials: { productId: string; quantityUsed: number }[];
+  materials: { productId: string; quantityUsed: number; batchId?: string }[];
   initialWeight?: number;
   finalWeight?: number;
   prepTime?: number;

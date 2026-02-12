@@ -38,8 +38,28 @@ export class ProcurementService {
         },
       });
 
-      // 2. Обновляем склад для каждой позиции
+      // 2. Обновляем склад для каждой позиции и создаем Партии (Batches)
       for (const item of data.items) {
+        // Find the procurement item ID we just created
+        const procItem = await tx.procurementItem.findFirst({
+            where: {
+                procurementId: procurement.id,
+                productId: item.productId,
+                quantity: new Prisma.Decimal(item.quantity)
+            }
+        });
+
+        // Создаем Партию (Batch)
+        await tx.batch.create({
+            data: {
+                productId: item.productId,
+                procurementItemId: procItem?.id, // Link if found, strictly logic
+                initialQuantity: new Prisma.Decimal(item.quantity),
+                remainingQuantity: new Prisma.Decimal(item.quantity),
+                pricePerUnit: new Prisma.Decimal(item.pricePerUnit)
+            }
+        });
+
         const product = await tx.product.findUnique({
           where: { id: item.productId },
         });
@@ -51,7 +71,7 @@ export class ProcurementService {
         const newQty = item.quantity;
         const newPrice = item.pricePerUnit;
 
-        // Расчет новой средней цены закупа: (Старый_остаток * Старая_цена + Новый_закуп * Новая_цена) / (Общий_остаток)
+        // Расчет новой средней цены (оставляем как справочную, хотя основной учет теперь по партиям)
         const totalQty = currentStock + newQty;
         let newAvgPurchasePrice = currentAvgPrice;
 

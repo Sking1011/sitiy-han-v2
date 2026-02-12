@@ -222,16 +222,16 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                   </div>
 
                   <div className="space-y-3">
-                    {fields.filter(f => f.isMain).map((field, index) => {
-                      const actualIndex = fields.findIndex(f => f.id === field.id)
+                    {fields.filter(f => f.isMain).map((item) => {
+                      const actualIndex = fields.findIndex(f => f.id === item.id)
                       return (
-                        <div key={field.id} className="flex gap-2 items-start p-3 rounded-lg border bg-primary/5 border-primary/20">
+                        <div key={item.id} className="flex gap-2 items-start p-3 rounded-lg border bg-primary/5 border-primary/20">
                           <FormField
                             control={form.control}
                             name={`ingredients.${actualIndex}.ingredientId`}
-                            render={({ field }) => (
+                            render={({ field: formField }) => (
                               <FormItem className="flex-1">
-                                <Popover open={openStates[field.id]} onOpenChange={(o) => setPopoverOpen(field.id, o)}>
+                                <Popover open={openStates[item.id]} onOpenChange={(o) => setPopoverOpen(item.id, o)}>
                                   <PopoverTrigger asChild>
                                     <FormControl>
                                       <Button
@@ -239,19 +239,19 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                                         role="combobox"
                                         className={cn(
                                           "w-full justify-between h-12 text-xs",
-                                          !field.value && "text-muted-foreground"
+                                          !formField.value && "text-muted-foreground"
                                         )}
                                       >
                                         <span className="truncate">
-                                          {field.value
-                                            ? products.find((p) => p.id === field.value)?.name
+                                          {formField.value
+                                            ? products.find((p) => p.id === formField.value)?.name
                                             : "Поиск сырья..."}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                       </Button>
                                     </FormControl>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
                                     <Command>
                                       <CommandInput placeholder="Введите название..." />
                                       <CommandList>
@@ -266,13 +266,13 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                                                   key={product.id}
                                                   onSelect={() => {
                                                     form.setValue(`ingredients.${actualIndex}.ingredientId`, product.id)
-                                                    setPopoverOpen(field.id, false)
+                                                    setPopoverOpen(item.id, false)
                                                   }}
                                                 >
                                                   <Check
                                                     className={cn(
                                                       "mr-2 h-4 w-4",
-                                                      product.id === field.value ? "opacity-100" : "opacity-0"
+                                                      product.id === formField.value ? "opacity-100" : "opacity-0"
                                                     )}
                                                   />
                                                   {product.name}
@@ -292,7 +292,7 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                           <FormField
                             control={form.control}
                             name={`ingredients.${actualIndex}.quantity`}
-                            render={({ field }) => (
+                            render={({ field: formField }) => (
                               <FormItem className="w-24 shrink-0">
                                 <FormControl>
                                   <div className="relative">
@@ -301,8 +301,8 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                                       inputMode="decimal"
                                       step="any"
                                       className="h-12 text-right pr-6 text-xs font-bold"
-                                      value={field.value === 0 ? "" : field.value}
-                                      onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value.replace(',', '.')))}
+                                      value={formField.value === 0 ? "" : formField.value}
+                                      onChange={e => formField.onChange(e.target.value === "" ? 0 : Number(e.target.value.replace(',', '.')))}
                                       onFocus={(e) => e.target.select()}
                                       placeholder="0"
                                     />
@@ -348,16 +348,16 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                   </div>
 
                   <div className="space-y-3">
-                    {fields.filter(f => !f.isMain).map((field, index) => {
-                      const actualIndex = fields.findIndex(f => f.id === field.id)
+                    {fields.filter(f => !f.isMain).map((item) => {
+                      const actualIndex = fields.findIndex(f => f.id === item.id)
                       return (
-                        <div key={field.id} className="flex gap-2 items-start p-3 rounded-lg border bg-card">
+                        <div key={item.id} className="flex gap-2 items-start p-3 rounded-lg border bg-card">
                           <FormField
                             control={form.control}
                             name={`ingredients.${actualIndex}.ingredientId`}
-                            render={({ field }) => (
+                            render={({ field: formField }) => (
                               <FormItem className="flex-1">
-                                <Popover open={openStates[field.id]} onOpenChange={(o) => setPopoverOpen(field.id, o)}>
+                                <Popover open={openStates[item.id]} onOpenChange={(o) => setPopoverOpen(item.id, o)}>
                                   <PopoverTrigger asChild>
                                     <FormControl>
                                       <Button
@@ -365,19 +365,19 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                                         role="combobox"
                                         className={cn(
                                           "w-full justify-between h-12 text-xs",
-                                          !field.value && "text-muted-foreground"
+                                          !formField.value && "text-muted-foreground"
                                         )}
                                       >
                                         <span className="truncate">
-                                          {field.value
-                                            ? products.find((p) => p.id === field.value)?.name
+                                          {formField.value
+                                            ? products.find((p) => p.id === formField.value)?.name
                                             : "Поиск специи..."}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                       </Button>
                                     </FormControl>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
                                     <Command>
                                       <CommandInput placeholder="Введите название..." />
                                       <CommandList>
@@ -392,13 +392,13 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                                                   key={product.id}
                                                   onSelect={() => {
                                                     form.setValue(`ingredients.${actualIndex}.ingredientId`, product.id)
-                                                    setPopoverOpen(field.id, false)
+                                                    setPopoverOpen(item.id, false)
                                                   }}
                                                 >
                                                   <Check
                                                     className={cn(
                                                       "mr-2 h-4 w-4",
-                                                      product.id === field.value ? "opacity-100" : "opacity-0"
+                                                      product.id === formField.value ? "opacity-100" : "opacity-0"
                                                     )}
                                                   />
                                                   {product.name}
@@ -418,7 +418,7 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                           <FormField
                             control={form.control}
                             name={`ingredients.${actualIndex}.quantity`}
-                            render={({ field }) => (
+                            render={({ field: formField }) => (
                               <FormItem className="w-24 shrink-0">
                                 <FormControl>
                                   <div className="relative">
@@ -427,8 +427,8 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                                       inputMode="decimal"
                                       step="any"
                                       className="h-12 text-right pr-6 text-xs font-bold"
-                                      value={field.value === 0 ? "" : field.value}
-                                      onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value.replace(',', '.')))}
+                                      value={formField.value === 0 ? "" : formField.value}
+                                      onChange={e => formField.onChange(e.target.value === "" ? 0 : Number(e.target.value.replace(',', '.')))}
                                       onFocus={(e) => e.target.select()}
                                       placeholder="0"
                                     />

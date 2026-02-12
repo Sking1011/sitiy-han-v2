@@ -52,8 +52,13 @@ export function ProductForm({ product, categories, onSuccess }: ProductFormProps
       categoryId: product?.categoryId || "",
       unit: product?.unit || Unit.KG,
       minStock: product ? Number(product.minStock) : 0,
+      sellingPrice: product ? Number((product as any).sellingPrice) : 0,
     },
   })
+
+  const selectedCategoryId = form.watch("categoryId")
+  const selectedCategory = categories.find(c => c.id === selectedCategoryId)
+  const isFinishedProduct = (selectedCategory as any)?.isFinished
 
   async function onSubmit(values: any) {
     setIsLoading(true)
@@ -140,6 +145,42 @@ export function ProductForm({ product, categories, onSuccess }: ProductFormProps
             </FormItem>
           )}
         />
+
+        {isFinishedProduct && (
+          <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-3">
+             <FormField
+              control={form.control}
+              name="sellingPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-primary font-bold flex justify-between">
+                    Цена продажи
+                    <span className="text-[10px] uppercase tracking-wider opacity-70">Розничная цена</span>
+                  </FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input 
+                        type="number" 
+                        className="h-14 text-2xl font-black pl-4 pr-12 bg-background border-primary/20 focus:border-primary transition-all"
+                        step="1" 
+                        placeholder="0"
+                        {...field} 
+                        onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">
+                        ₸/кг
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                  <p className="text-[11px] text-muted-foreground italic">
+                    Установите цену, по которой продукт будет отпускаться со склада.
+                  </p>
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <FormField

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select"
 import { Search, Loader2, ShoppingCart, X } from "lucide-react"
 import Link from "next/link"
+import { formatCurrency } from "@/lib/formatters"
 
 export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, onOpenChange: (o: boolean) => void }) {
   const [step, setStep] = useState(1) // 1: Search/Select, 2: Details
@@ -35,6 +36,7 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
   // Form values
   const [quantity, setQuantity] = useState("")
   const [price, setPrice] = useState("")
+  const [priceMode, setPriceMode] = useState<"unit" | "total">("unit")
   const [supplier, setSupplier] = useState("")
   const [paymentSource, setPaymentSource] = useState<PaymentSource>(PaymentSource.BUSINESS_CASH)
 
@@ -59,6 +61,7 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
   const handleSelectProduct = (p: any) => {
     setSelectedProduct(p)
     setPrice(p.averagePurchasePrice.toString())
+    setPriceMode("unit")
     setStep(2)
   }
 
@@ -68,6 +71,7 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
     setSelectedProduct(null)
     setQuantity("")
     setPrice("")
+    setPriceMode("unit")
     setSupplier("")
   }
 
@@ -76,13 +80,17 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
 
     setIsLoading(true)
     try {
+      const qty = parseFloat(quantity)
+      const pVal = parseFloat(price)
+      const pricePerUnit = priceMode === "total" ? pVal / qty : pVal
+
       await createProcurementAction({
         supplier,
         paymentSource,
         items: [{
           productId: selectedProduct.id,
-          quantity: parseFloat(quantity),
-          pricePerUnit: parseFloat(price)
+          quantity: qty,
+          pricePerUnit: pricePerUnit
         }]
       })
       handleReset()
@@ -205,7 +213,7 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
                   </Button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-6">
                   <div className="space-y-2">
                       <Label className="text-xs font-semibold uppercase text-muted-foreground">Количество ({selectedProduct.unit.toLowerCase()})</Label>
                       <Input 
@@ -219,17 +227,55 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
                           suppressHydrationWarning
                       />
                   </div>
-                  <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase text-muted-foreground">Цена за ед. (₸)</Label>
-                      <Input 
-                          type="text" 
-                          inputMode="numeric"
-                          className="h-14 text-xl font-bold" 
-                          value={price}
-                          onChange={(e) => setPrice(e.target.value)}
-                          autoComplete="no"
-                          suppressHydrationWarning
-                      />
+
+                  <div className="space-y-3">
+                      <div className="flex bg-muted p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setPriceMode("unit")}
+                          className={cn(
+                            "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                            priceMode === "unit" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          Цена за ед.
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPriceMode("total")}
+                          className={cn(
+                            "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                            priceMode === "total" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          Общая сумма
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                            {priceMode === "unit" ? "Цена за 1 " + selectedProduct.unit.toLowerCase() : "Сумма за весь объем"} (₸)
+                        </Label>
+                        <Input 
+                            type="text" 
+                            inputMode="numeric"
+                            className="h-14 text-xl font-bold" 
+                            value={price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            autoComplete="no"
+                            suppressHydrationWarning
+                        />
+                        {priceMode === "total" && quantity && price && (
+                          <p className="text-[10px] text-muted-foreground font-bold text-right italic animate-in fade-in slide-in-from-right-1">
+                            Выходит по {formatCurrency(parseFloat(price) / parseFloat(quantity))} за {selectedProduct.unit.toLowerCase()}
+                          </p>
+                        )}
+                        {priceMode === "unit" && quantity && price && (
+                          <p className="text-[10px] text-muted-foreground font-bold text-right italic animate-in fade-in slide-in-from-right-1">
+                            Общая сумма закупа: {formatCurrency(parseFloat(price) * parseFloat(quantity))}
+                          </p>
+                        )}
+                      </div>
                   </div>
               </div>
 
