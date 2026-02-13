@@ -19,6 +19,26 @@ export interface AccountingTransaction {
 }
 
 export class AccountingService {
+  static async createExpense(data: {
+    categoryId: string;
+    amount: number;
+    paymentSource: PaymentSource;
+    description?: string;
+    name: string;
+    userId: string;
+  }) {
+    return prisma.expense.create({
+      data: {
+        categoryId: data.categoryId,
+        amount: data.amount,
+        paymentSource: data.paymentSource,
+        description: data.description,
+        name: data.name,
+        userId: data.userId
+      }
+    });
+  }
+
   static async getTransactions(params?: {
     startDate?: Date;
     endDate?: Date;

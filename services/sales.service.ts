@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
+import { InventoryService } from "./inventory.service";
+
 export class SalesService {
   static async createSale(data: {
     customer?: string;
@@ -33,25 +35,9 @@ export class SalesService {
         },
       });
 
-      // 2. Списываем со склада
+      // 2. Списываем со склада используя централизованную логику FIFO
       for (const item of data.items) {
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) throw new Error(`Товар не найден`);
-
-        const currentStock = Number(product.currentStock);
-        if (currentStock < item.quantity) {
-          throw new Error(`Недостаточно товара "${product.name}" на складе (доступно: ${currentStock})`);
-        }
-
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            currentStock: new Prisma.Decimal(currentStock - item.quantity),
-          },
-        });
+        await InventoryService.deductStock(tx, item.productId, item.quantity);
       }
 
       return sale;

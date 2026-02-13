@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { Product, PaymentSource } from "@prisma/client"
-import { createProcurementAction } from "@/app/actions/procurement.actions"
+import { createBulkProcurementAction } from "@/app/actions/procurement.actions"
 import { searchProductsAction } from "@/app/actions/inventory.actions"
 import { cn } from "@/lib/utils"
+import { useSession } from "next-auth/react"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,8 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
   const [priceMode, setPriceMode] = useState<"unit" | "total">("unit")
   const [supplier, setSupplier] = useState("")
   const [paymentSource, setPaymentSource] = useState<PaymentSource>(PaymentSource.BUSINESS_CASH)
+
+  const { data: session } = useSession()
 
   // Quick search
   useEffect(() => {
@@ -76,7 +79,7 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
   }
 
   const handleSubmit = async () => {
-    if (!selectedProduct || !quantity || !price) return
+    if (!selectedProduct || !quantity || !price || !session?.user) return
 
     setIsLoading(true)
     try {
@@ -84,7 +87,8 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
       const pVal = parseFloat(price)
       const pricePerUnit = priceMode === "total" ? pVal / qty : pVal
 
-      await createProcurementAction({
+      await createBulkProcurementAction({
+        userId: (session.user as any).id,
         supplier,
         paymentSource,
         items: [{

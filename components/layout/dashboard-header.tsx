@@ -1,16 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, ShoppingCart, TrendingUp, Search } from "lucide-react"
+import { Plus, ShoppingCart, TrendingUp, Search, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ModeToggle } from "@/components/layout/mode-toggle"
 import { QuickProcurementDialog } from "@/components/procurement/quick-procurement-dialog"
 import { QuickSaleDialog } from "@/components/sales/quick-sale-dialog"
+import { QuickExpenseDialog } from "@/components/accounting/quick-expense-dialog"
 
 export function DashboardHeader() {
   const [isProcurementOpen, setIsProcurementOpen] = useState(false)
   const [isSaleOpen, setIsSaleOpen] = useState(false)
+  const [isExpenseOpen, setIsExpenseOpen] = useState(false)
 
   return (
     <header className="hidden lg:flex h-16 items-center justify-between border-b px-6 bg-card sticky top-0 z-40">
@@ -45,6 +47,16 @@ export function DashboardHeader() {
           Закупить
         </Button>
 
+        <Button 
+            variant="outline" 
+            size="sm"
+            className="text-red-600 border-red-600/20 hover:bg-red-50 dark:hover:bg-red-950"
+            onClick={() => setIsExpenseOpen(true)}
+        >
+          <Receipt className="mr-2 h-4 w-4" />
+          Оплатить
+        </Button>
+
         <div className="h-6 w-px bg-border mx-2" />
         
         <ModeToggle />
@@ -57,6 +69,10 @@ export function DashboardHeader() {
       <QuickSaleDialog 
         open={isSaleOpen} 
         onOpenChange={setIsSaleOpen} 
+      />
+      <QuickExpenseDialog 
+        open={isExpenseOpen} 
+        onOpenChange={setIsExpenseOpen} 
       />
     </header>
   )

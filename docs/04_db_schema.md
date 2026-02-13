@@ -72,47 +72,74 @@
 - `id`: UUID (Primary Key)
 - `productionId`: UUID (Foreign Key)
 - `productId`: UUID (Сырье)
-- `quantityUsed`: Decimal (Фактический расход, может отличаться от рецепта)
+- `batchId`: UUID (Foreign Key -> Batch, Nullable) — *С какой конкретно партии списано*
+- `quantityUsed`: Decimal (Фактический расход)
 
-### 10. `Sale` (Продажи)
+### 10. `Batch` (Партии / Попарный учет)
+- `id`: UUID (Primary Key)
+- `productId`: UUID (Foreign Key)
+- `procurementItemId`: UUID (Nullable, Foreign Key -> ProcurementItem)
+- `productionItemId`: UUID (Nullable, Foreign Key -> ProductionItem)
+- `initialQuantity`: Decimal (Изначальный вес при поступлении)
+- `remainingQuantity`: Decimal (Текущий остаток в партии)
+- `pricePerUnit`: Decimal (Себестоимость единицы в этой партии)
+- `createdAt`: DateTime
+
+### 11. `BatchMerge` (Слияния партий)
+- `id`: UUID (Primary Key)
+- `productId`: UUID (Foreign Key)
+- `sourceInfo`: String (Описание откуда пришло)
+- `targetInfo`: String (Описание куда ушло)
+- `targetBatchId`: UUID (В какую партию влито)
+- `quantityMerged`: Decimal (Вес переноса)
+- `priceAtMerge`: Decimal (Цена на момент переноса)
+- `userId`: UUID (Кто выполнил)
+- `date`: DateTime
+
+### 12. `Disposal` (Списания / Брак)
+- `id`: UUID (Primary Key)
+- `productId`: UUID (Foreign Key)
+- `batchId`: UUID (Nullable, Foreign Key -> Batch)
+- `quantity`: Decimal
+- `reason`: String (Брак, Порча, Дегустация)
+- `userId`: UUID
+- `date`: DateTime
+
+### 13. `Sale` (Продажи)
 - `id`: UUID (Primary Key)
 - `date`: DateTime
 - `totalRevenue`: Decimal (Выручка в KZT)
 - `customer`: String (Nullable)
+- `userId`: UUID (Кто продал)
 
-### 11. `SaleItem` (Позиции в продаже)
+### 14. `SaleItem` (Позиции в продаже)
 - `id`: UUID (Primary Key)
 - `saleId`: UUID (Foreign Key)
 - `productId`: UUID (Foreign Key)
 - `quantity`: Decimal
 - `pricePerUnit`: Decimal (Цена реализации)
 
-### 12. `Expense` (Дополнительные расходы)
+### 15. `Expense` (Дополнительные расходы)
 - `id`: UUID (Primary Key)
 - `categoryId`: UUID (Foreign Key)
+- `name`: String
 - `amount`: Decimal (KZT)
+- `paymentSource`: Enum (BUSINESS_CASH, PERSONAL_FUNDS)
 - `description`: String
 - `date`: DateTime
+- `userId`: UUID
 
-### 14. `SystemSetting` (Глобальные настройки)
-- `key`: String (Primary Key, напр. "TAX_RATE_PERCENT")
-- `value`: String (напр. "6")
+### 16. `SystemSetting` (Глобальные настройки)
+- `key`: String (Primary Key)
+- `value`: String
 - `description`: String
 
-## Изменения в существующих таблицах
-
-### 6. `Procurement` (Закупки)
-- ... (существующие поля)
-- `paymentSource`: Enum (BUSINESS_CASH, PERSONAL_FUNDS) — *Новое поле*
-- `isExpensed`: Boolean (Учитывать ли в расходах, по умолчанию True)
-
-### 12. `Expense` (Дополнительные расходы и Прочее)
+### 17. `AuditLog` (Журнал действий)
 - `id`: UUID (Primary Key)
-- `categoryId`: UUID (Foreign Key -> Категория "Хозтовары", "Аренда")
-- `name`: String (Произвольное название, напр. "Перчатки 3 пачки")
-- `amount`: Decimal (Сумма)
-- `paymentSource`: Enum (BUSINESS_CASH, PERSONAL_FUNDS) — *Новое поле*
-- `date`: DateTime
+- `timestamp`: DateTime
+- `userId`: UUID
+- `action`: String
+- `details`: String (JSON)
 
 ## Логика расчетов (Бизнес-информация)
 

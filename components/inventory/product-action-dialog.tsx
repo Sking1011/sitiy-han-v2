@@ -40,15 +40,17 @@ import {
   Weight,
   Beef,
   ClipboardList,
-  ScrollText
+  ScrollText,
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatUnit, formatCurrency, formatDate } from "@/lib/formatters"
 import { getProductHistoryAction, createDisposalAction, getBatchesAction, mergeBatchesAction, getBatchesByCategoryAction } from "@/app/actions/inventory.actions"
-import { createProcurementAction } from "@/app/actions/procurement.actions"
+import { createBulkProcurementAction } from "@/app/actions/procurement.actions"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 import { InventoryActionHelp } from "./inventory-action-help"
+import { HistoryList } from "./history-list"
 
 interface ProductActionDialogProps {
   product: Product | null
@@ -60,36 +62,13 @@ interface ProductActionDialogProps {
 type ActionType = "overview" | "batches" | "history" | "disposal" | "purchase" | "merge"
 
 const SECTIONS = [
-  { id: "overview", title: "Описание варки", icon: ClipboardList },
+  { id: "overview", title: "Описание готовки", icon: ClipboardList },
   { id: "batches", title: "Партии (Остатки)", icon: Package },
   { id: "history", title: "История движения", icon: History },
   { id: "merge", title: "Слияние", icon: GitMerge },
   { id: "disposal", title: "Списание", icon: Trash2 },
   { id: "purchase", title: "Закуп", icon: ShoppingCart },
 ]
-
-const getTransactionTypeInfo = (type: string) => {
-    switch (type) {
-        case "PROCUREMENT":
-            return { label: "Закуп", icon: ShoppingCart, color: "text-green-600 bg-green-50 border-green-100" };
-        case "SALE":
-            return { label: "Продажа", icon: TrendingUp, color: "text-blue-600 bg-blue-50 border-blue-100" };
-        case "PRODUCTION_USAGE":
-            return { label: "Цех (исп.)", icon: Layers, color: "text-orange-600 bg-orange-50 border-orange-100" };
-        case "PRODUCTION_OUTPUT":
-            return { label: "Цех (выпуск)", icon: CheckCircle2, color: "text-primary bg-primary/5 border-primary/10" };
-        case "DISPOSAL":
-            return { label: "Списание", icon: Trash2, color: "text-red-600 bg-red-50 border-red-100" };
-        case "MERGE":
-            return { 
-                label: "Слияние", 
-                icon: GitMerge, 
-                color: "text-purple-600 bg-purple-50 border-purple-100" 
-            };
-        default:
-            return { label: type, icon: Info, color: "text-muted-foreground bg-muted/50 border-border" };
-    }
-}
 
 export function ProductActionDialog({ product, open, onOpenChange, initialBatch }: ProductActionDialogProps) {
   const { data: session } = useSession()
@@ -179,7 +158,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
   }
 
   const handleMerge = async () => {
-    if (!product || !sourceBatchId || !initialBatch?.id || !session?.user?.id) return
+    if (!product || !sourceBatchId || !initialBatch?.id || !session?.user) return
     
     setIsLoading(true)
     try {
@@ -187,7 +166,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
         productId: product.id,
         sourceBatchId,
         targetBatchId: initialBatch.id,
-        userId: session.user.id,
+        userId: (session.user as any).id,
         quantity: isFullMerge ? undefined : parseFloat(mergeQty)
       })
       toast.success("Слияние завершено")
@@ -203,7 +182,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
   }
 
   const handleFullMerge = async () => {
-    if (!product || !initialBatch?.id || batches.length < 2 || !session?.user?.id) return
+    if (!product || !initialBatch?.id || batches.length < 2 || !session?.user) return
     
     setIsLoading(true)
     try {
@@ -214,7 +193,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
           productId: product.id,
           sourceBatchId: b.id,
           targetBatchId: initialBatch.id,
-          userId: session.user.id
+          userId: (session.user as any).id
         })
       }
       toast.success("Все партии товара объединены в текущую")
@@ -228,14 +207,14 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
   }
 
   const handleDisposal = async () => {
-    if (!product || !disposalQty || !session?.user?.id) return
+    if (!product || !disposalQty || !session?.user) return
     setIsLoading(true)
     try {
       await createDisposalAction({
         productId: product.id,
         quantity: parseFloat(disposalQty),
         reason: disposalReason,
-        userId: session.user.id,
+        userId: (session.user as any).id,
         batchId: initialBatch?.id // Если списание вызвано из карточки конкретной партии
       })
       toast.success("Списание успешно оформлено")
@@ -251,14 +230,15 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
   }
 
   const handlePurchase = async () => {
-    if (!product || !purchaseQty || !purchasePrice || !session?.user?.id) return
+    if (!product || !purchaseQty || !purchasePrice || !session?.user) return
     setIsLoading(true)
     try {
       const qty = parseFloat(purchaseQty)
       const priceVal = parseFloat(purchasePrice)
       const pricePerUnit = purchasePriceMode === "total" ? priceVal / qty : priceVal
 
-      await createProcurementAction({
+      await createBulkProcurementAction({
+        userId: (session.user as any).id,
         supplier: purchaseSupplier,
         paymentSource: purchasePaymentSource,
         items: [{
@@ -284,23 +264,23 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1000px] p-0 gap-0 overflow-hidden sm:rounded-xl border bg-background h-[700px] max-h-[90vh] flex flex-col">
-        <DialogHeader className="p-6 border-b flex-shrink-0">
+      <DialogContent className="max-w-[1000px] p-0 gap-0 overflow-hidden sm:rounded-xl border bg-background sm:h-[700px] sm:max-h-[90vh] max-sm:h-[100dvh] max-sm:max-h-none max-sm:rounded-none max-sm:top-0 max-sm:translate-y-0 max-sm:border-none flex flex-col">
+        <DialogHeader className="p-4 sm:p-6 border-b flex-shrink-0">
           <div className="flex items-center justify-between w-full pr-8">
-            <div className="flex items-center gap-4">
-                <div className="p-2.5 bg-muted rounded-lg">
-                <Package className="w-5 h-5 text-primary" />
+            <div className="flex items-center gap-3 sm:gap-4">
+                <div className="p-2 sm:p-2.5 bg-muted rounded-lg">
+                <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                 </div>
                 <div>
-                <DialogTitle className="text-xl font-bold tracking-tight">{product.name}</DialogTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Управление остатками и история</p>
+                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight">{product.name}</DialogTitle>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Управление остатками и история</p>
                 </div>
             </div>
             <InventoryActionHelp />
           </div>
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden h-full">
+        <div className="flex flex-1 overflow-hidden h-full flex-col md:flex-row">
           {/* Sidebar */}
           <div className="w-64 bg-muted/20 border-r flex-shrink-0 hidden md:block">
             <div className="p-4 space-y-1">
@@ -339,51 +319,51 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 bg-background overflow-hidden relative flex flex-col">
+          <div className="flex-1 bg-background overflow-hidden relative flex flex-col min-h-0">
             <ScrollArea className="flex-1">
-              <div className="p-8 max-sm:p-6">
+              <div className="sm:p-8 p-4 max-sm:pb-32">
                 {activeSection === "overview" && initialBatch?.production && (
-                  <div className="space-y-8 animate-in fade-in duration-300">
-                    <div className="flex justify-between items-start">
+                  <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                         <div className="space-y-1">
-                            <h3 className="text-2xl font-bold tracking-tight">Детали варки</h3>
-                            <p className="text-sm text-muted-foreground">Полная информация о производственном цикле</p>
+                            <h3 className="text-xl sm:text-2xl font-bold tracking-tight">Детали готовки</h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground">Полная информация о производственном цикле</p>
                         </div>
-                        <Badge variant="outline" className="px-3 py-1 text-xs font-bold bg-primary/5 border-primary/20 text-primary uppercase">
+                        <Badge variant="outline" className="px-3 py-1 text-[10px] sm:text-xs font-bold bg-primary/5 border-primary/20 text-primary uppercase">
                             Партия #{initialBatch.id.slice(0, 8)}
                         </Badge>
                     </div>
 
                     {/* Основные показатели */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                         {[
                             { label: "Начальный вес", value: formatUnit(initialBatch.production.initialWeight, "KG"), icon: Scale, color: "text-blue-600" },
                             { label: "Финальный вес", value: formatUnit(initialBatch.production.finalWeight, "KG"), icon: Weight, color: "text-green-600" },
                             { label: "Усушка", value: `${((initialBatch.production.initialWeight - initialBatch.production.finalWeight) / initialBatch.production.initialWeight * 100).toFixed(1)}%`, icon: TrendingUp, color: "text-red-500" },
-                            { label: "Себестоимость", value: formatCurrency(initialBatch.pricePerUnit), icon: ShoppingCart, color: "text-primary" }
+                            { label: "Себест. / кг", value: formatCurrency(initialBatch.pricePerUnit), icon: ShoppingCart, color: "text-primary" }
                         ].map((stat, i) => (
-                            <div key={i} className="p-4 rounded-xl border bg-muted/5 space-y-1">
+                            <div key={i} className="p-3 sm:p-4 rounded-xl border bg-muted/5 space-y-1">
                                 <div className="flex items-center gap-2">
                                     <stat.icon className={cn("w-3 h-3", stat.color)} />
-                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">{stat.label}</span>
+                                    <span className="text-[9px] sm:text-[10px] font-bold uppercase text-muted-foreground tracking-wider">{stat.label}</span>
                                 </div>
-                                <p className="text-lg font-bold">{stat.value}</p>
+                                <p className="text-sm sm:text-lg font-bold">{stat.value}</p>
                             </div>
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                         {/* Левая колонка: Состав и Рецептура */}
-                        <div className="space-y-8">
+                        <div className="space-y-6 sm:space-y-8">
                             {initialBatch.production.recipe && (
                                 <div className="space-y-3">
-                                    <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
+                                    <h4 className="text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
                                         <ScrollText className="w-4 h-4" /> Использованная рецептура
                                     </h4>
                                     <div className="p-4 rounded-xl border bg-primary/[0.02] border-primary/10 space-y-2">
-                                        <p className="font-bold text-primary">{initialBatch.production.recipe.name}</p>
+                                        <p className="font-bold text-sm sm:text-base text-primary">{initialBatch.production.recipe.name}</p>
                                         {initialBatch.production.recipe.description && (
-                                            <p className="text-xs text-muted-foreground leading-relaxed italic line-clamp-3">
+                                            <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed italic line-clamp-3">
                                                 {initialBatch.production.recipe.description}
                                             </p>
                                         )}
@@ -392,37 +372,49 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                             )}
 
                             <div className="space-y-4">
-                                <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
+                                <h4 className="text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
                                     <Beef className="w-4 h-4" /> Состав сырья
                                 </h4>
-                                <div className="rounded-xl border overflow-hidden">
-                                <table className="w-full text-xs">
-                                    <thead className="bg-muted/50 border-b">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left font-bold">Ингредиент</th>
-                                            <th className="px-4 py-2 text-right font-bold">Кол-во</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {initialBatch.production.materials.map((m: any, i: number) => (
-                                            <tr key={i} className="bg-background">
-                                                <td className="px-4 py-2.5 font-medium">{m.product.name}</td>
-                                                <td className="px-4 py-2.5 text-right font-bold">{formatUnit(m.quantityUsed, m.product.unit)}</td>
+                                
+                                {/* Desktop Table */}
+                                <div className="hidden sm:block rounded-xl border overflow-hidden">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-muted/50 border-b">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-bold">Ингредиент</th>
+                                                <th className="px-4 py-2 text-right font-bold">Кол-во</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {initialBatch.production.materials.map((m: any, i: number) => (
+                                                <tr key={i} className="bg-background">
+                                                    <td className="px-4 py-2.5 font-medium">{m.product.name}</td>
+                                                    <td className="px-4 py-2.5 text-right font-bold">{formatUnit(m.quantityUsed, m.product.unit)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Mobile Cards */}
+                                <div className="sm:hidden space-y-2">
+                                    {initialBatch.production.materials.map((m: any, i: number) => (
+                                        <div key={i} className="flex justify-between items-center p-3 rounded-lg border bg-background">
+                                            <span className="text-xs font-medium">{m.product.name}</span>
+                                            <span className="text-xs font-bold">{formatUnit(m.quantityUsed, m.product.unit)}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    </div>
 
                         {/* Время и Оператор */}
                         <div className="space-y-6">
                             <div className="space-y-4">
-                                <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
+                                <h4 className="text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
                                     <Clock className="w-4 h-4" /> Тайминги этапов
                                 </h4>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                                     {[
                                         { label: "Подготовка", val: initialBatch.production.prepTime },
                                         { label: "Сушка", val: initialBatch.production.dryingTime },
@@ -430,7 +422,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                         { label: "Варка", val: initialBatch.production.boilingTime }
                                     ].map((t, i) => (
                                         <div key={i} className="flex justify-between items-center p-3 rounded-lg border bg-muted/10">
-                                            <span className="text-[11px] font-medium">{t.label}</span>
+                                            <span className="text-[10px] sm:text-[11px] font-medium">{t.label}</span>
                                             <span className="text-xs font-bold">{t.val || 0} мин</span>
                                         </div>
                                     ))}
@@ -443,14 +435,14 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                         <User className="w-4 h-4 text-primary" />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-bold text-primary uppercase">Исполнитель</p>
-                                        <p className="text-sm font-bold">{initialBatch.production.performer.name}</p>
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-primary uppercase">Исполнитель</p>
+                                        <p className="text-xs sm:text-sm font-bold">{initialBatch.production.performer.name}</p>
                                     </div>
                                 </div>
                                 {initialBatch.production.note && initialBatch.production.note.replace(/\[RecipeID:.*?\]/g, "").trim() && (
                                     <div className="pt-2 border-t border-primary/10">
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase">Примечание</p>
-                                        <p className="text-xs italic text-muted-foreground leading-relaxed mt-1">
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">Примечание</p>
+                                        <p className="text-[11px] sm:text-xs italic text-muted-foreground leading-relaxed mt-1">
                                             "{initialBatch.production.note.replace(/\[RecipeID:.*?\]/g, "").trim()}"
                                         </p>
                                     </div>
@@ -463,7 +455,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
                 {activeSection === "batches" && (
                   <div className="space-y-6">
-                    <h3 className="text-xl font-bold tracking-tight">Активные партии</h3>
+                    <h3 className="text-lg sm:text-xl font-bold tracking-tight">Активные партии</h3>
                     {isLoading ? (
                       <div className="flex justify-center py-10">
                         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -471,20 +463,20 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                     ) : (
                       <div className="space-y-2">
                         {batches.map((batch) => (
-                          <div key={batch.id} className="flex items-center justify-between p-4 rounded-xl border bg-muted/10">
+                          <div key={batch.id} className="flex items-center justify-between p-3 sm:p-4 rounded-xl border bg-muted/10">
                             <div className="space-y-0.5">
-                              <p className="font-semibold text-sm">
+                              <p className="font-semibold text-xs sm:text-sm">
                                 {batch.procurementItem?.procurement?.supplier || "Склад"}
                               </p>
-                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                              <p className="text-[9px] sm:text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
                                 {formatDate(batch.createdAt)}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="text-base font-bold">
-                                {formatUnit(batch.remainingQuantity, product.unit)} <span className="text-xs text-muted-foreground font-normal">/ {batch.initialQuantity}</span>
+                              <p className="text-sm sm:text-base font-bold">
+                                {formatUnit(batch.remainingQuantity, product.unit)} <span className="text-[10px] sm:text-xs text-muted-foreground font-normal">/ {batch.initialQuantity}</span>
                               </p>
-                              <p className="text-[10px] text-muted-foreground font-medium">
+                              <p className="text-[9px] sm:text-[10px] text-muted-foreground font-medium">
                                 {formatCurrency(batch.pricePerUnit)} за {product.unit.toLowerCase()}
                               </p>
                             </div>
@@ -504,15 +496,16 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                 {activeSection === "merge" && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-bold tracking-tight">Слияние в текущую партию</h3>
+                        <h3 className="text-lg sm:text-xl font-bold tracking-tight">Слияние</h3>
                         <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={handleFullMerge}
                             disabled={isLoading || batches.length < 2 || !initialBatch}
+                            className="h-9 sm:h-10"
                         >
-                            <GitMerge className="w-4 h-4 mr-2" />
-                            Влить всё
+                            <GitMerge className="w-4 h-4 mr-1.5 sm:mr-2" />
+                            <span className="text-xs sm:text-sm">Влить всё</span>
                         </Button>
                     </div>
 
@@ -523,26 +516,56 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            <div className="p-4 rounded-xl border bg-muted/20 border-border/50">
-                                <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Принимающая партия (Цель)</p>
-                                <p className="font-bold text-sm">#{initialBatch.id.slice(0, 8)} | {initialBatch.info}</p>
-                                <p className="text-xs text-muted-foreground mt-1">Остаток: {formatUnit(initialBatch.remainingQuantity, product.unit)}</p>
+                            <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/[0.03] relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-2 opacity-10">
+                                    <GitMerge className="w-12 h-12" />
+                                </div>
+                                <p className="text-[10px] uppercase font-bold text-primary mb-2 tracking-widest">Принимающая партия (Цель слияния)</p>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Package className="w-4 h-4 text-primary" />
+                                        <p className="font-bold text-sm sm:text-base">{product.name}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-0.5">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Партия</p>
+                                            <p className="text-xs font-semibold">#{initialBatch.id.slice(0, 8)}</p>
+                                        </div>
+                                        <div className="space-y-0.5 text-right">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Создана</p>
+                                            <p className="text-xs font-semibold">{formatDate(initialBatch.createdAt)}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Текущий остаток</p>
+                                            <p className="text-sm font-bold text-primary">{formatUnit(initialBatch.remainingQuantity, product.unit)}</p>
+                                        </div>
+                                        <div className="space-y-0.5 text-right">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Текущая цена</p>
+                                            <p className="text-sm font-bold">{formatCurrency(initialBatch.pricePerUnit)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 mt-2 border-t border-primary/10">
+                                        <p className="text-[10px] italic text-muted-foreground leading-tight">
+                                            * Все выбранные партии будут поглощены этой карточкой. Средневзвешенная цена пересчитается автоматически.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Источник переноса</Label>
+                                    <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Источник переноса</Label>
                                     <Select value={sourceBatchId} onValueChange={setSourceBatchId}>
-                                        <SelectTrigger className="h-12 bg-background">
-                                            <SelectValue placeholder="Выберите партию из категории..." />
+                                        <SelectTrigger className="h-12 sm:h-14 bg-background">
+                                            <SelectValue placeholder="Выберите партию..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {categoryBatches.filter(b => b.id !== initialBatch.id).map(b => (
                                                 <SelectItem key={b.id} value={b.id}>
                                                     <div className="flex flex-col">
                                                         <span className="font-bold text-xs">{b.productName}</span>
-                                                        <span className="text-[10px] opacity-70">
-                                                            {formatDate(b.createdAt)} | {b.remainingQuantity} {product.unit.toLowerCase()} | {formatCurrency(b.pricePerUnit)}
+                                                        <span className="text-[9px] opacity-70">
+                                                            {formatDate(b.createdAt)} | {b.remainingQuantity} {product.unit.toLowerCase()}
                                                         </span>
                                                     </div>
                                                 </SelectItem>
@@ -553,11 +576,11 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
                                 {sourceBatchId && (
                                     <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                        <div className="flex bg-muted p-1 rounded-lg w-fit">
+                                        <div className="flex bg-muted p-1 rounded-lg w-full sm:w-fit">
                                             <button
                                                 onClick={() => setIsFullMerge(true)}
                                                 className={cn(
-                                                    "px-4 py-1.5 text-[10px] font-bold rounded-md transition-all",
+                                                    "flex-1 sm:flex-none px-4 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
                                                     isFullMerge ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                                                 )}
                                             >
@@ -566,7 +589,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                             <button
                                                 onClick={() => setIsFullMerge(false)}
                                                 className={cn(
-                                                    "px-4 py-1.5 text-[10px] font-bold rounded-md transition-all",
+                                                    "flex-1 sm:flex-none px-4 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
                                                     !isFullMerge ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                                                 )}
                                             >
@@ -576,10 +599,10 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
                                         {!isFullMerge && (
                                             <div className="space-y-1.5">
-                                                <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Вес для переноса ({product.unit.toLowerCase()})</Label>
+                                                <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Вес ({product.unit.toLowerCase()})</Label>
                                                 <Input 
                                                     type="number" inputMode="decimal" step="0.001"
-                                                    className="h-12 text-lg font-bold"
+                                                    className="h-12 sm:h-14 text-lg font-bold"
                                                     placeholder="0.000"
                                                     value={mergeQty}
                                                     onChange={(e) => setMergeQty(e.target.value.replace(',', '.'))}
@@ -587,21 +610,18 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                             </div>
                                         )}
 
-                                        <div className="p-5 rounded-xl border bg-muted/5 space-y-4">
-                                            <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                                                <span className="text-[10px] font-bold uppercase text-muted-foreground">Итоговый результат в текущей партии</span>
-                                            </div>
+                                        <div className="p-4 sm:p-5 rounded-xl border bg-muted/5 space-y-4">
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
-                                                    <p className="text-[10px] uppercase text-muted-foreground font-medium mb-0.5">Новый вес</p>
-                                                    <p className="text-lg font-bold">
+                                                    <p className="text-[9px] sm:text-[10px] uppercase text-muted-foreground font-medium mb-0.5">Новый вес</p>
+                                                    <p className="text-base sm:text-lg font-bold">
                                                         {(Number(initialBatch.remainingQuantity) + 
                                                          (isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0)).toFixed(3)} {product.unit.toLowerCase()}
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[10px] uppercase text-muted-foreground font-medium mb-0.5">Новая цена</p>
-                                                    <p className="text-lg font-bold">
+                                                    <p className="text-[9px] sm:text-[10px] uppercase text-muted-foreground font-medium mb-0.5">Новая цена</p>
+                                                    <p className="text-base sm:text-lg font-bold text-primary">
                                                         {formatCurrency(
                                                             ((isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0) * Number(categoryBatches.find(b => b.id === sourceBatchId)?.pricePerUnit || 0) +
                                                              Number(initialBatch.remainingQuantity) * Number(initialBatch.pricePerUnit)) /
@@ -611,7 +631,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                                 </div>
                                             </div>
                                             <Button 
-                                                className="w-full h-12 font-bold mt-2"
+                                                className="w-full h-12 sm:h-14 font-bold"
                                                 onClick={handleMerge}
                                                 disabled={isLoading || (!isFullMerge && !mergeQty)}
                                             >
@@ -629,47 +649,13 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
                 {activeSection === "history" && (
                   <div className="space-y-6">
-                    <h3 className="text-xl font-bold tracking-tight">История движения</h3>
+                    <h3 className="text-lg sm:text-xl font-bold tracking-tight">История движения</h3>
                     {isLoading ? (
                       <div className="flex justify-center py-10">
                         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        {history.map((item) => {
-                          const info = getTransactionTypeInfo(item.type);
-                          return (
-                            <div key={item.id} className="flex items-center justify-between p-3.5 rounded-xl border bg-muted/5">
-                              <div className="flex gap-3 items-start">
-                                <div className={cn("p-2 rounded-lg border", info.color)}>
-                                   <info.icon className="w-4 h-4" />
-                                </div>
-                                <div className="space-y-0.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                                      {info.label}
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground font-medium">{formatDate(item.date)}</span>
-                                  </div>
-                                  <p className="font-semibold text-sm">{item.counterparty}</p>
-                                  <p className="text-[10px] text-muted-foreground">Исполнитель: {item.performedBy}</p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className={cn(
-                                  "text-base font-bold",
-                                  item.quantity > 0 ? "text-green-600" : "text-red-600"
-                                )}>
-                                  {item.quantity > 0 ? "+" : ""}{item.quantity} {product.unit.toLowerCase()}
-                                </p>
-                                {item.price && (
-                                  <p className="text-[10px] text-muted-foreground">{formatCurrency(item.price)}</p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <HistoryList history={history} productUnit={product.unit.toLowerCase()} />
                     )}
                   </div>
                 )}
@@ -683,26 +669,27 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                     
                     <div className="space-y-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Кол-во ({product.unit.toLowerCase()})</Label>
+                        <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Кол-во ({product.unit.toLowerCase()})</Label>
                         <Input 
+                          autoFocus
                           type="number" inputMode="decimal" step="0.001"
-                          className="h-12 text-lg font-bold"
+                          className="h-12 sm:h-14 text-lg font-bold"
                           placeholder="0.000"
                           value={disposalQty}
                           onChange={(e) => setDisposalQty(e.target.value.replace(',', '.'))}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Причина</Label>
+                        <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Причина</Label>
                         <Input 
                           placeholder="Укажите причину..."
-                          className="h-12"
+                          className="h-12 sm:h-14"
                           value={disposalReason}
                           onChange={(e) => setDisposalReason(e.target.value)}
                         />
                       </div>
                       <Button 
-                        className="w-full h-12 font-bold mt-2"
+                        className="w-full h-12 sm:h-14 font-bold mt-2"
                         onClick={handleDisposal}
                         disabled={isLoading || !disposalQty}
                       >
@@ -714,7 +701,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                 )}
 
                 {activeSection === "purchase" && (
-                  <div className="space-y-6 max-w-sm mx-auto pt-4">
+                  <div className="space-y-6 max-w-sm mx-auto pt-2 sm:pt-4">
                     <div className="text-center space-y-1">
                         <h3 className="text-xl font-bold tracking-tight">Быстрый закуп</h3>
                         <p className="text-xs text-muted-foreground">Оформите поступление товара</p>
@@ -723,10 +710,11 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                     <div className="space-y-4">
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Количество</Label>
+                          <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Количество</Label>
                           <Input 
+                            autoFocus
                             type="number" inputMode="decimal" step="0.001"
-                            className="h-12 text-lg font-bold"
+                            className="h-12 sm:h-14 text-lg font-bold"
                             placeholder="0.000"
                             value={purchaseQty}
                             onChange={(e) => setPurchaseQty(e.target.value.replace(',', '.'))}
@@ -738,7 +726,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                             <button
                               onClick={() => setPurchasePriceMode("unit")}
                               className={cn(
-                                "flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all",
+                                "flex-1 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
                                 purchasePriceMode === "unit" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
                               )}
                             >
@@ -747,7 +735,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                             <button
                               onClick={() => setPurchasePriceMode("total")}
                               className={cn(
-                                "flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all",
+                                "flex-1 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
                                 purchasePriceMode === "total" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
                               )}
                             >
@@ -756,18 +744,18 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">
+                            <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">
                               {purchasePriceMode === "unit" ? "Цена (₸)" : "Сумма (₸)"}
                             </Label>
                             <Input 
                               type="number" inputMode="numeric"
-                              className="h-12 text-lg font-bold"
+                              className="h-12 sm:h-14 text-lg font-bold"
                               placeholder="0"
                               value={purchasePrice}
                               onChange={(e) => setPurchasePrice(e.target.value)}
                             />
                             {purchaseQty && purchasePrice && (
-                                <p className="text-[10px] text-muted-foreground font-medium text-right">
+                                <p className="text-[10px] text-muted-foreground font-medium text-right mt-1">
                                     {purchasePriceMode === "total" 
                                         ? `~ ${formatCurrency(parseFloat(purchasePrice) / parseFloat(purchaseQty))} / ${product.unit.toLowerCase()}`
                                         : `Итого: ${formatCurrency(parseFloat(purchasePrice) * parseFloat(purchaseQty))}`
@@ -778,18 +766,18 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Поставщик</Label>
+                        <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Поставщик</Label>
                         <Input 
                           placeholder="Название компании"
-                          className="h-11"
+                          className="h-12 sm:h-14"
                           value={purchaseSupplier}
                           onChange={(e) => setPurchaseSupplier(e.target.value)}
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase text-muted-foreground ml-1">Оплата</Label>
+                        <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Оплата</Label>
                         <Select value={purchasePaymentSource} onValueChange={(v: any) => setPurchasePaymentSource(v)}>
-                          <SelectTrigger className="h-11">
+                          <SelectTrigger className="h-12 sm:h-14">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -799,7 +787,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                         </Select>
                       </div>
                       <Button 
-                        className="w-full h-12 font-bold mt-2"
+                        className="w-full h-12 sm:h-14 font-bold mt-2"
                         onClick={handlePurchase}
                         disabled={isLoading || !purchaseQty || !purchasePrice}
                       >

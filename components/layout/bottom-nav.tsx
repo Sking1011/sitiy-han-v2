@@ -32,6 +32,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { QuickProcurementDialog } from "@/components/procurement/quick-procurement-dialog"
 import { QuickSaleDialog } from "@/components/sales/quick-sale-dialog"
+import { QuickExpenseDialog } from "@/components/accounting/quick-expense-dialog"
 
 export function BottomNav() {
   const pathname = usePathname()
@@ -162,6 +163,7 @@ export function QuickActions() {
 
   const [isProcurementOpen, setIsProcurementOpen] = useState(false)
   const [isSaleOpen, setIsSaleOpen] = useState(false)
+  const [isExpenseOpen, setIsExpenseOpen] = useState(false)
 
   return (
     <>
@@ -206,11 +208,16 @@ export function QuickActions() {
                   <ShoppingCart className="h-6 w-6" />
                   <span>Закупить</span>
                 </Button>
-                <Button variant="outline" className="h-24 flex-col gap-2" asChild onClick={() => setOpen(false)}>
-                  <Link href="/expenses/new">
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex-col gap-2" 
+                  onClick={() => {
+                    setOpen(false)
+                    setIsExpenseOpen(true)
+                  }}
+                >
                     <Plus className="h-6 w-6" />
                     <span>Расход</span>
-                  </Link>
                 </Button>
               </>
             )}
@@ -225,6 +232,10 @@ export function QuickActions() {
       <QuickSaleDialog 
         open={isSaleOpen} 
         onOpenChange={setIsSaleOpen} 
+      />
+      <QuickExpenseDialog 
+        open={isExpenseOpen} 
+        onOpenChange={setIsExpenseOpen} 
       />
     </>
   )

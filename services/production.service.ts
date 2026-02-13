@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ProductionStatus, Prisma } from "@prisma/client";
+import { InventoryService } from "./inventory.service";
 
 export class ProductionService {
   static async getProductionMaterials() {
@@ -181,39 +182,7 @@ export class ProductionService {
       // 1. Списание сырья
       for (const mat of materials) {
           const qty = Number(mat.quantityUsed);
-          
-          // Уменьшаем общий остаток товара
-          await tx.product.update({
-              where: { id: mat.productId },
-              data: { currentStock: { decrement: new Prisma.Decimal(qty) } }
-          });
-
-          if (mat.batchId) {
-              // Списание с конкретной партии
-              await tx.batch.update({
-                  where: { id: mat.batchId },
-                  data: { remainingQuantity: { decrement: new Prisma.Decimal(qty) } }
-              });
-          } else {
-              // FIFO Списание
-              let remainingToDeduct = qty;
-              const batches = await tx.batch.findMany({
-                  where: { productId: mat.productId, remainingQuantity: { gt: 0 } },
-                  orderBy: { createdAt: 'asc' }
-              });
-
-              for (const batch of batches) {
-                  if (remainingToDeduct <= 0) break;
-                  const available = Number(batch.remainingQuantity);
-                  const toTake = Math.min(available, remainingToDeduct);
-                  
-                  await tx.batch.update({
-                      where: { id: batch.id },
-                      data: { remainingQuantity: { decrement: new Prisma.Decimal(toTake) } }
-                  });
-                  remainingToDeduct -= toTake;
-              }
-          }
+          await InventoryService.deductStock(tx, mat.productId, qty, mat.batchId);
       }
 
       // 2. Приход готовой продукции

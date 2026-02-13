@@ -7,6 +7,11 @@ import { serializeEntity } from "@/lib/utils"
 
 // --- Category Actions ---
 
+export async function getCategoriesAction(type?: CategoryType) {
+  const categories = await InventoryService.getCategories(type)
+  return serializeEntity(categories)
+}
+
 export async function createCategoryAction(data: {
   name: string
   type: CategoryType

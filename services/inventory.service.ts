@@ -87,7 +87,7 @@ export class InventoryService {
     return products.map(p => ({
         ...p,
         minStock: Number(p.minStock),
-        currentStock: Number(p.currentStock),
+        currentStock: Number(p.currentStock), // Возвращаем быстрый и (теперь) точный остаток из БД
         averagePurchasePrice: Number(p.averagePurchasePrice),
         sellingPrice: Number(p.sellingPrice),
         batches: p.batches.map(b => {
@@ -126,6 +126,82 @@ export class InventoryService {
             };
         })
     }));
+  }
+
+  /**
+   * Централизованный метод списания запасов.
+   * Гарантирует синхронное обновление Product.currentStock и Batch.remainingQuantity.
+   * Поддерживает:
+   * 1. Списание с конкретной партии (если передан batchId)
+   * 2. Списание по FIFO (если batchId не передан)
+   */
+  static async deductStock(tx: any, productId: string, quantity: number, specificBatchId?: string) {
+      const product = await tx.product.findUnique({
+          where: { id: productId },
+      });
+
+      if (!product) throw new Error(`Товар не найден: ${productId}`);
+
+      const currentStock = Number(product.currentStock);
+      
+      // Логируем, если уходим в минус, но не блокируем производство
+      if (currentStock < quantity) {
+          console.warn(`[StockWarning] Недостаточно товара "${product.name}" (Нужно: ${quantity}, Есть: ${currentStock}). Списание произведено в минус.`);
+      }
+
+      // 1. Уменьшаем общий остаток товара (может стать отрицательным)
+      await tx.product.update({
+          where: { id: productId },
+          data: {
+              currentStock: { decrement: new Prisma.Decimal(quantity) },
+          },
+      });
+
+      // 2. Списываем из партий
+      if (specificBatchId) {
+          // Строгое списание с партии
+          const batch = await tx.batch.findUnique({ where: { id: specificBatchId } });
+          if (!batch) throw new Error(`Партия ${specificBatchId} не найдена`);
+          
+          if (Number(batch.remainingQuantity) < quantity) {
+              throw new Error(`В партии недостаточно остатка (Нужно: ${quantity}, Есть: ${batch.remainingQuantity})`);
+          }
+
+          await tx.batch.update({
+              where: { id: specificBatchId },
+              data: { remainingQuantity: { decrement: new Prisma.Decimal(quantity) } }
+          });
+      } else {
+          // FIFO списание
+          let remainingToDeduct = quantity;
+          const activeBatches = await tx.batch.findMany({
+              where: { 
+                  productId: productId,
+                  remainingQuantity: { gt: 0 }
+              },
+              orderBy: { createdAt: 'asc' } // Старые партии первыми
+          });
+
+          for (const batch of activeBatches) {
+              if (remainingToDeduct <= 0) break;
+
+              const batchQty = Number(batch.remainingQuantity);
+              const deductFromBatch = Math.min(batchQty, remainingToDeduct);
+
+              await tx.batch.update({
+                  where: { id: batch.id },
+                  data: {
+                      remainingQuantity: { decrement: new Prisma.Decimal(deductFromBatch) }
+                  }
+              });
+
+              remainingToDeduct -= deductFromBatch;
+          }
+
+          if (remainingToDeduct > 0.001) {
+              console.warn(`[StockWarning] Product ${product.name}: Stock deducted but batches were insufficient by ${remainingToDeduct}`);
+          }
+      }
   }
 
   static async getLowStockProducts() {
@@ -340,7 +416,7 @@ export class InventoryService {
         orderBy: { procurement: { date: "desc" } }
       }),
       prisma.saleItem.findMany({
-        where: { productId }, // Продажи пока не привязаны к партиям в схеме, оставим так
+        where: { productId },
         include: { sale: { include: { user: true } } },
         orderBy: { sale: { date: "desc" } }
       }),
@@ -349,7 +425,14 @@ export class InventoryService {
             productId,
             batchId: batchId || undefined
         },
-        include: { production: { include: { performer: true } } },
+        include: { 
+            production: { 
+                include: { 
+                    performer: true,
+                    items: { include: { product: { select: { name: true } } } }
+                } 
+            } 
+        },
         orderBy: { production: { date: "desc" } }
       }),
       prisma.productionItem.findMany({
@@ -357,7 +440,14 @@ export class InventoryService {
             productId,
             batch: batchId ? { id: batchId } : undefined
         },
-        include: { production: { include: { performer: true } } },
+        include: { 
+            production: { 
+                include: { 
+                    performer: true,
+                    materials: { include: { product: { select: { name: true, unit: true } } } }
+                } 
+            } 
+        },
         orderBy: { production: { date: "desc" } }
       }),
       prisma.disposal.findMany({
@@ -376,7 +466,7 @@ export class InventoryService {
             productId,
             OR: batchId ? [
                 { targetBatchId: batchId },
-                { sourceInfo: { contains: batchId } } // Это упрощенно, для точного поиска нужно расширять схему
+                { sourceInfo: { contains: batchId } }
             ] : undefined
         },
         include: { user: true },
@@ -393,7 +483,11 @@ export class InventoryService {
         price: Number(p.pricePerUnit),
         total: Number(p.quantity) * Number(p.pricePerUnit),
         counterparty: p.procurement.supplier || "Поставщик",
-        performedBy: p.procurement.user?.name || "Система"
+        performedBy: p.procurement.user?.name || "Система",
+        details: {
+            supplier: p.procurement.supplier,
+            paymentSource: p.procurement.paymentSource
+        }
       })),
       ...sales.map(s => ({
         id: s.id,
@@ -403,52 +497,129 @@ export class InventoryService {
         price: Number(s.pricePerUnit),
         total: Number(s.quantity) * Number(s.pricePerUnit),
         counterparty: s.sale.customer || "Клиент",
-        performedBy: s.sale.user?.name || "Система"
+        performedBy: s.sale.user?.name || "Система",
+        details: {
+            customer: s.sale.customer
+        }
       })),
       ...productionUsage.map(pm => ({
         id: pm.id,
         date: pm.production.date,
         type: "PRODUCTION_USAGE" as const,
         quantity: -Number(pm.quantityUsed),
-        counterparty: "Цех (списание)",
-        performedBy: pm.production.performer.name
+        counterparty: `В производство: ${pm.production.items[0]?.product.name || "Цех"}`,
+        performedBy: pm.production.performer.name,
+        details: {
+            productionId: pm.productionId,
+            targetProduct: pm.production.items[0]?.product.name
+        }
       })),
       ...productionOutput.map(pi => ({
         id: pi.id,
         date: pi.production.date,
         type: "PRODUCTION_OUTPUT" as const,
         quantity: Number(pi.quantityProduced),
-        counterparty: "Цех (выпуск)",
-        performedBy: pi.production.performer.name
+        counterparty: "Выпуск из цеха",
+        performedBy: pi.production.performer.name,
+        details: {
+            productionId: pi.productionId,
+            materials: pi.production.materials.map(m => ({
+                name: m.product.name,
+                quantity: Number(m.quantityUsed),
+                unit: m.product.unit
+            })),
+            initialWeight: Number(pi.production.initialWeight),
+            finalWeight: Number(pi.production.finalWeight)
+        }
       })),
       ...disposals.map(d => ({
         id: d.id,
         date: d.date,
         type: "DISPOSAL" as const,
         quantity: -Number(d.quantity),
-        counterparty: d.batch 
-            ? `${d.reason || 'Списание'} (из партии ${d.batch.id.slice(0,8)})`
-            : (d.reason || "Списание"),
-        performedBy: d.user.name
-      })),
-      ...merges.flatMap(m => ([
-        {
-          id: `${m.id}-out`,
-          date: m.date,
-          type: "MERGE" as const,
-          quantity: -Number(m.quantityMerged),
-          counterparty: `Ушло в: ${m.targetInfo}`,
-          performedBy: m.user.name
-        },
-        {
-          id: `${m.id}-in`,
-          date: m.date,
-          type: "MERGE" as const,
-          quantity: Number(m.quantityMerged),
-          counterparty: `Пришло из: ${m.sourceInfo}`,
-          performedBy: m.user.name
+        counterparty: d.reason || "Списание",
+        performedBy: d.user.name,
+        details: {
+            reason: d.reason,
+            batchId: d.batchId
         }
-      ]))
+      })),
+      ...merges.flatMap(m => {
+        const items = [];
+        const cleanSourceInfo = m.sourceInfo.replace(/\[BATCH:.*?\]\s*/, "");
+        const sourceBatchIdMatch = m.sourceInfo.match(/\[BATCH:(.*?)\]/);
+        const sourceBatchId = sourceBatchIdMatch ? sourceBatchIdMatch[1] : null;
+
+        // Если мы смотрим историю конкретной партии (batchId задан)
+        if (batchId) {
+            // Если эта партия - источник (уход)
+            if (sourceBatchId === batchId) {
+                items.push({
+                    id: `${m.id}-out`,
+                    date: m.date,
+                    type: "MERGE" as const,
+                    quantity: -Number(m.quantityMerged),
+                    counterparty: `Перенос в: ${m.targetInfo}`,
+                    performedBy: m.user.name,
+                    details: {
+                        isOut: true,
+                        sourceInfo: cleanSourceInfo,
+                        targetInfo: m.targetInfo,
+                        priceAtMerge: Number(m.priceAtMerge)
+                    }
+                });
+            }
+            // Если эта партия - цель (приход)
+            if (m.targetBatchId === batchId) {
+                items.push({
+                    id: `${m.id}-in`,
+                    date: m.date,
+                    type: "MERGE" as const,
+                    quantity: Number(m.quantityMerged),
+                    counterparty: `Приход из: ${cleanSourceInfo}`,
+                    performedBy: m.user.name,
+                    details: {
+                        isIn: true,
+                        sourceInfo: cleanSourceInfo,
+                        targetInfo: m.targetInfo,
+                        priceAtMerge: Number(m.priceAtMerge)
+                    }
+                });
+            }
+        } else {
+            // Если смотрим историю всего товара (batchId не задан)
+            // Показываем обе стороны, но с понятными названиями
+            items.push({
+                id: `${m.id}-out`,
+                date: m.date,
+                type: "MERGE" as const,
+                quantity: -Number(m.quantityMerged),
+                counterparty: `Снятие (слияние) -> ${m.targetInfo}`,
+                performedBy: m.user.name,
+                details: {
+                    isOut: true,
+                    sourceInfo: cleanSourceInfo,
+                    targetInfo: m.targetInfo,
+                    priceAtMerge: Number(m.priceAtMerge)
+                }
+            });
+            items.push({
+                id: `${m.id}-in`,
+                date: m.date,
+                type: "MERGE" as const,
+                quantity: Number(m.quantityMerged),
+                counterparty: `Пополнение (слияние) <- ${cleanSourceInfo}`,
+                performedBy: m.user.name,
+                details: {
+                    isIn: true,
+                    sourceInfo: cleanSourceInfo,
+                    targetInfo: m.targetInfo,
+                    priceAtMerge: Number(m.priceAtMerge)
+                }
+            });
+        }
+        return items;
+      })
     ];
 
     return history.sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -612,29 +783,51 @@ export class InventoryService {
 
   
 
-        // Запись о слиянии (в историю цели)
+                // Запись о слиянии (в историю цели)
 
-        await tx.batchMerge.create({
+  
 
-          data: {
+                await tx.batchMerge.create({
 
-            productId: target.productId,
+  
 
-            targetBatchId: data.targetBatchId,
+                  data: {
 
-            sourceInfo: `${source.product.name}: ${source.productionItem ? 'Варка' : 'Закуп'} от ${source.createdAt.toLocaleDateString()}`,
+  
 
-            targetInfo: `${target.product.name}: Партия #${target.id.slice(0,8)}`,
+                    productId: target.productId,
 
-            quantityMerged: new Prisma.Decimal(qtyToMerge),
+  
 
-            priceAtMerge: source.pricePerUnit,
+                    targetBatchId: data.targetBatchId,
 
-            userId: data.userId
+  
 
-          }
+                    sourceInfo: `[BATCH:${source.id}] ${source.product.name}: ${source.productionItem ? 'Варка' : 'Закуп'} от ${source.createdAt.toLocaleDateString()}`,
 
-        });
+  
+
+                    targetInfo: `${target.product.name}: Партия #${target.id.slice(0,8)}`,
+
+  
+
+                    quantityMerged: new Prisma.Decimal(qtyToMerge),
+
+  
+
+                    priceAtMerge: source.pricePerUnit,
+
+  
+
+                    userId: data.userId
+
+  
+
+                  }
+
+  
+
+                });
 
   
 
@@ -695,207 +888,84 @@ export class InventoryService {
   
 
     static async getBatches(productId: string) {
-
-      const batches = await prisma.batch.findMany({
-
-        where: { 
-
-          productId,
-
-          remainingQuantity: { gt: 0 } 
-
-        },
-
-        orderBy: { createdAt: 'desc' },
-
-        include: {
-
-          product: { select: { name: true, categoryId: true } },
-
-          procurementItem: {
-
-              include: { procurement: { select: { supplier: true, date: true } } }
-
+      const [batches, allMerges] = await Promise.all([
+        prisma.batch.findMany({
+          where: { 
+            productId,
+            remainingQuantity: { gt: 0 } 
           },
-
-                  productionItem: {
-
-                      include: {
-
-                          production: {
-
-                              include: { 
-
-                                  performer: { select: { name: true } },
-
-                                  materials: {
-
-                                      include: {
-
-                                          product: { select: { name: true, unit: true } }
-
-                                      }
-
-                                  }
-
-                              }
-
-                          }
-
-                      }
-
-                  }
-
-                }
-
-              });
-
-          
-
-                  const recipes = await prisma.recipe.findMany();
-
-          
-
-              
-
-          
-
-                  return batches.map(b => {
-
-          
-
-                    const production = b.productionItem?.production;
-
-          
-
-                    let recipeInfo = null;
-
-          
-
-                    
-
-          
-
-                    if (production?.note) {
-
-          
-
-                        const recipeMatch = production.note.match(/\[RecipeID:(.*?)\]/);
-
-          
-
-                        const recipeId = recipeMatch ? recipeMatch[1] : null;
-
-          
-
-                        if (recipeId) {
-
-          
-
-                            recipeInfo = recipes.find(r => r.id === recipeId);
-
-          
-
+          orderBy: { createdAt: 'desc' },
+          include: {
+            product: { select: { name: true, categoryId: true } },
+            procurementItem: {
+                include: { procurement: { select: { supplier: true, date: true } } }
+            },
+                    productionItem: {
+                        include: {
+                            production: {
+                                include: { 
+                                    performer: { select: { name: true } },
+                                    materials: {
+                                        include: {
+                                            product: { select: { name: true, unit: true } }
+                                        }
+                                    }
+                                }
+                            }
                         }
-
+                    }
+                  }
+        }),
+        prisma.batchMerge.findMany({
+            where: { productId },
+            include: { user: { select: { name: true } } },
+            orderBy: { date: 'desc' }
+        })
+      ]);
           
-
+                  const recipes = await prisma.recipe.findMany();
+          
+                  return batches.map(b => {
+                    const production = b.productionItem?.production;
+                    let recipeInfo = null;
+          
+                    if (production?.note) {
+                        const recipeMatch = production.note.match(/\[RecipeID:(.*?)\]/);
+                        const recipeId = recipeMatch ? recipeMatch[1] : null;
+                        if (recipeId) {
+                            recipeInfo = recipes.find(r => r.id === recipeId);
+                        }
                     }
 
-          
-
-              
-
-          
+                    // Фильтруем слияния, которые относятся именно к этой целевой партии
+                    const batchMerges = allMerges.filter(m => m.targetBatchId === b.id);
 
                     return {
-
-          
-
                       ...b,
-
-          
-
                       initialQuantity: Number(b.initialQuantity),
-
-          
-
                       remainingQuantity: Number(b.remainingQuantity),
-
-          
-
                       pricePerUnit: Number(b.pricePerUnit),
-
-          
-
+                      merges: batchMerges.map(m => ({
+                          ...m,
+                          quantityMerged: Number(m.quantityMerged),
+                          priceAtMerge: Number(m.priceAtMerge)
+                      })),
                       production: production ? {
-
-          
-
                           ...production,
-
-          
-
                           recipe: recipeInfo ? { name: recipeInfo.name, description: recipeInfo.description } : null,
-
-          
-
                           initialWeight: Number(production.initialWeight),
-
-          
-
                           finalWeight: Number(production.finalWeight),
-
-          
-
                           totalCost: Number(production.totalCost),
-
-          
-
                           materials: production.materials.map((m: any) => ({
-
-          
-
                               ...m,
-
-          
-
                               quantityUsed: Number(m.quantityUsed)
-
-          
-
                           }))
-
-          
-
                       } : null,
-
-          
-
                       info: b.productionItem 
-
-          
-
                           ? `Варка от ${b.productionItem.production.date.toLocaleDateString()} (${b.productionItem.production.performer.name})`
-
-          
-
                           : (b.procurementItem?.procurement?.supplier || "Склад")
-
-          
-
                     };
-
-          
-
                   });
-
-          
-
-              
-
-          
-
     }
 
   
