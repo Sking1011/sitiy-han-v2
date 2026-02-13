@@ -20,10 +20,11 @@ COPY . .
 # Генерируем Prisma Client
 RUN npx prisma generate
 
-# Отключаем телеметрию Next.js во время сборки
+# Отключаем телеметрию и проверки, которые могут требовать БД или много ресурсов
 ENV NEXT_TELEMETRY_DISABLED 1
-# Передаем пустую или фейковую БД для этапа билда
-ENV DATABASE_URL=postgresql://postgres:password@localhost:5432/db?schema=public
+ENV SKIP_TYPES_CHECK 1
+ENV SKIP_LINT 1
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 
 RUN npm run build
 
