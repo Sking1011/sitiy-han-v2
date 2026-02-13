@@ -26,13 +26,10 @@ import {
   ShoppingCart, 
   Info,
   Layers,
-  ChevronRight,
   Loader2,
   Package,
   TrendingUp,
   CheckCircle2,
-  ArrowDownRight,
-  ArrowUpRight,
   GitMerge,
   Clock,
   User,
@@ -56,7 +53,7 @@ interface ProductActionDialogProps {
   product: Product | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  initialBatch?: any // Партия, из которой открыто окно
+  initialBatch?: any 
 }
 
 type ActionType = "overview" | "batches" | "history" | "disposal" | "purchase" | "merge"
@@ -78,7 +75,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
   const [categoryBatches, setCategoryBatches] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  // Обновляем активную вкладку при открытии
   useEffect(() => {
     if (open) {
         if (initialBatch?.production) {
@@ -89,22 +85,18 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
     }
   }, [open, initialBatch])
 
-  // Фильтруем пункты меню в зависимости от типа партии
   const visibleSections = SECTIONS.filter(s => {
       if (s.id === "overview" && !initialBatch?.production) return false;
       return true;
   });
 
-  // Merge State
   const [sourceBatchId, setSourceBatchId] = useState<string>("")
   const [mergeQty, setMergeQty] = useState<string>("")
   const [isFullMerge, setIsFullMerge] = useState(true)
 
-  // Disposal Form
   const [disposalQty, setDisposalQty] = useState("")
   const [disposalReason, setDisposalReason] = useState("")
 
-  // Purchase Form
   const [purchaseQty, setPurchaseQty] = useState("")
   const [purchasePrice, setPurchasePrice] = useState("")
   const [purchasePriceMode, setPurchasePriceMode] = useState<"unit" | "total">("unit")
@@ -135,7 +127,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
     setIsLoading(true)
     try {
       const data = await getBatchesAction(product.id)
-      // Если открыта конкретная партия, показываем только её
       if (initialBatch) {
           setBatches(data.filter((b: any) => b.id === initialBatch.id))
       } else {
@@ -159,7 +150,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
   const handleMerge = async () => {
     if (!product || !sourceBatchId || !initialBatch?.id || !session?.user) return
-    
     setIsLoading(true)
     try {
       await mergeBatchesAction({
@@ -183,10 +173,8 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
 
   const handleFullMerge = async () => {
     if (!product || !initialBatch?.id || batches.length < 2 || !session?.user) return
-    
     setIsLoading(true)
     try {
-      // Сливаем все другие партии в текущую
       for (const b of batches) {
         if (b.id === initialBatch.id) continue;
         await mergeBatchesAction({
@@ -215,7 +203,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
         quantity: parseFloat(disposalQty),
         reason: disposalReason,
         userId: (session.user as any).id,
-        batchId: initialBatch?.id // Если списание вызвано из карточки конкретной партии
+        batchId: initialBatch?.id
       })
       toast.success("Списание успешно оформлено")
       setDisposalQty("")
@@ -281,7 +269,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden h-full flex-col md:flex-row">
-          {/* Sidebar */}
           <div className="w-64 bg-muted/20 border-r flex-shrink-0 hidden md:block">
             <div className="p-4 space-y-1">
               {visibleSections.map((section) => (
@@ -302,7 +289,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
             </div>
           </div>
 
-          {/* Mobile Navigation */}
           <div className="flex md:hidden border-b bg-muted/10 p-2 overflow-x-auto gap-2 no-scrollbar">
              {visibleSections.map((section) => (
                 <Button
@@ -318,7 +304,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
              ))}
           </div>
 
-          {/* Content Area */}
           <div className="flex-1 bg-background overflow-hidden relative flex flex-col min-h-0">
             <ScrollArea className="flex-1">
               <div className="sm:p-8 p-4 max-sm:pb-32">
@@ -334,7 +319,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                         </Badge>
                     </div>
 
-                    {/* Основные показатели */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                         {[
                             { label: "Начальный вес", value: formatUnit(initialBatch.production.initialWeight, "KG"), icon: Scale, color: "text-blue-600" },
@@ -353,7 +337,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
-                        {/* Левая колонка: Состав и Рецептура */}
                         <div className="space-y-6 sm:space-y-8">
                             {initialBatch.production.recipe && (
                                 <div className="space-y-3">
@@ -375,8 +358,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                 <h4 className="text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
                                     <Beef className="w-4 h-4" /> Состав сырья
                                 </h4>
-                                
-                                {/* Desktop Table */}
                                 <div className="hidden sm:block rounded-xl border overflow-hidden">
                                     <table className="w-full text-xs">
                                         <thead className="bg-muted/50 border-b">
@@ -395,8 +376,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                         </tbody>
                                     </table>
                                 </div>
-
-                                {/* Mobile Cards */}
                                 <div className="sm:hidden space-y-2">
                                     {initialBatch.production.materials.map((m: any, i: number) => (
                                         <div key={i} className="flex justify-between items-center p-3 rounded-lg border bg-background">
@@ -408,7 +387,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                             </div>
                         </div>
 
-                        {/* Время и Оператор */}
                         <div className="space-y-6">
                             <div className="space-y-4">
                                 <h4 className="text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-muted-foreground">
@@ -497,13 +475,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg sm:text-xl font-bold tracking-tight">Слияние</h3>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleFullMerge}
-                            disabled={isLoading || batches.length < 2 || !initialBatch}
-                            className="h-9 sm:h-10"
-                        >
+                        <Button variant="outline" size="sm" onClick={handleFullMerge} disabled={isLoading || batches.length < 2 || !initialBatch} className="h-9 sm:h-10">
                             <GitMerge className="w-4 h-4 mr-1.5 sm:mr-2" />
                             <span className="text-xs sm:text-sm">Влить всё</span>
                         </Button>
@@ -517,9 +489,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                     ) : (
                         <div className="space-y-6">
                             <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/[0.03] relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-2 opacity-10">
-                                    <GitMerge className="w-12 h-12" />
-                                </div>
+                                <div className="absolute top-0 right-0 p-2 opacity-10"><GitMerge className="w-12 h-12" /></div>
                                 <p className="text-[10px] uppercase font-bold text-primary mb-2 tracking-widest">Принимающая партия (Цель слияния)</p>
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2">
@@ -544,11 +514,6 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                             <p className="text-sm font-bold">{formatCurrency(initialBatch.pricePerUnit)}</p>
                                         </div>
                                     </div>
-                                    <div className="pt-2 mt-2 border-t border-primary/10">
-                                        <p className="text-[10px] italic text-muted-foreground leading-tight">
-                                            * Все выбранные партии будут поглощены этой карточкой. Средневзвешенная цена пересчитается автоматически.
-                                        </p>
-                                    </div>
                                 </div>
                             </div>
 
@@ -564,9 +529,7 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                                 <SelectItem key={b.id} value={b.id}>
                                                     <div className="flex flex-col">
                                                         <span className="font-bold text-xs">{b.productName}</span>
-                                                        <span className="text-[9px] opacity-70">
-                                                            {formatDate(b.createdAt)} | {b.remainingQuantity} {product.unit.toLowerCase()}
-                                                        </span>
+                                                        <span className="text-[9px] opacity-70">{formatDate(b.createdAt)} | {b.remainingQuantity} {product.unit.toLowerCase()}</span>
                                                     </div>
                                                 </SelectItem>
                                             ))}
@@ -577,64 +540,27 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                                 {sourceBatchId && (
                                     <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
                                         <div className="flex bg-muted p-1 rounded-lg w-full sm:w-fit">
-                                            <button
-                                                onClick={() => setIsFullMerge(true)}
-                                                className={cn(
-                                                    "flex-1 sm:flex-none px-4 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
-                                                    isFullMerge ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                                                )}
-                                            >
-                                                Весь остаток
-                                            </button>
-                                            <button
-                                                onClick={() => setIsFullMerge(false)}
-                                                className={cn(
-                                                    "flex-1 sm:flex-none px-4 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
-                                                    !isFullMerge ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                                                )}
-                                            >
-                                                Выбрать вес
-                                            </button>
+                                            <button onClick={() => setIsFullMerge(true)} className={cn("flex-1 sm:flex-none px-4 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all", isFullMerge ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>Весь остаток</button>
+                                            <button onClick={() => setIsFullMerge(false)} className={cn("flex-1 sm:flex-none px-4 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all", !isFullMerge ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>Выбрать вес</button>
                                         </div>
-
                                         {!isFullMerge && (
                                             <div className="space-y-1.5">
                                                 <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Вес ({product.unit.toLowerCase()})</Label>
-                                                <Input 
-                                                    type="number" inputMode="decimal" step="0.001"
-                                                    className="h-12 sm:h-14 text-lg font-bold"
-                                                    placeholder="0.000"
-                                                    value={mergeQty}
-                                                    onChange={(e) => setMergeQty(e.target.value.replace(',', '.'))}
-                                                />
+                                                <Input type="number" inputMode="decimal" step="0.001" className="h-12 sm:h-14 text-lg font-bold" placeholder="0.000" value={mergeQty} onChange={(e) => setMergeQty(e.target.value.replace(',', '.'))} />
                                             </div>
                                         )}
-
                                         <div className="p-4 sm:p-5 rounded-xl border bg-muted/5 space-y-4">
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
                                                     <p className="text-[9px] sm:text-[10px] uppercase text-muted-foreground font-medium mb-0.5">Новый вес</p>
-                                                    <p className="text-base sm:text-lg font-bold">
-                                                        {(Number(initialBatch.remainingQuantity) + 
-                                                         (isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0)).toFixed(3)} {product.unit.toLowerCase()}
-                                                    </p>
+                                                    <p className="text-base sm:text-lg font-bold">{(Number(initialBatch.remainingQuantity) + (isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0)).toFixed(3)} {product.unit.toLowerCase()}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-[9px] sm:text-[10px] uppercase text-muted-foreground font-medium mb-0.5">Новая цена</p>
-                                                    <p className="text-base sm:text-lg font-bold text-primary">
-                                                        {formatCurrency(
-                                                            ((isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0) * Number(categoryBatches.find(b => b.id === sourceBatchId)?.pricePerUnit || 0) +
-                                                             Number(initialBatch.remainingQuantity) * Number(initialBatch.pricePerUnit)) /
-                                                            (Number(initialBatch.remainingQuantity) + (isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0))
-                                                        )}
-                                                    </p>
+                                                    <p className="text-base sm:text-lg font-bold text-primary">{formatCurrency(((isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0) * Number(categoryBatches.find(b => b.id === sourceBatchId)?.pricePerUnit || 0) + Number(initialBatch.remainingQuantity) * Number(initialBatch.pricePerUnit)) / (Number(initialBatch.remainingQuantity) + (isFullMerge ? Number(categoryBatches.find(b => b.id === sourceBatchId)?.remainingQuantity || 0) : parseFloat(mergeQty) || 0)))}</p>
                                                 </div>
                                             </div>
-                                            <Button 
-                                                className="w-full h-12 sm:h-14 font-bold"
-                                                onClick={handleMerge}
-                                                disabled={isLoading || (!isFullMerge && !mergeQty)}
-                                            >
+                                            <Button className="w-full h-12 sm:h-14 font-bold" onClick={handleMerge} disabled={isLoading || (!isFullMerge && !mergeQty)}>
                                                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitMerge className="w-4 h-4 mr-2" />}
                                                 Выполнить перенос
                                             </Button>
@@ -666,33 +592,16 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                         <h3 className="text-xl font-bold tracking-tight">Списание</h3>
                         <p className="text-xs text-muted-foreground">Уменьшение остатков вручную</p>
                     </div>
-                    
                     <div className="space-y-4">
                       <div className="space-y-1.5">
                         <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Кол-во ({product.unit.toLowerCase()})</Label>
-                        <Input 
-                          autoFocus
-                          type="number" inputMode="decimal" step="0.001"
-                          className="h-12 sm:h-14 text-lg font-bold"
-                          placeholder="0.000"
-                          value={disposalQty}
-                          onChange={(e) => setDisposalQty(e.target.value.replace(',', '.'))}
-                        />
+                        <Input autoFocus type="number" inputMode="decimal" step="0.001" className="h-12 sm:h-14 text-lg font-bold" placeholder="0.000" value={disposalQty} onChange={(e) => setDisposalQty(e.target.value.replace(',', '.'))} />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Причина</Label>
-                        <Input 
-                          placeholder="Укажите причину..."
-                          className="h-12 sm:h-14"
-                          value={disposalReason}
-                          onChange={(e) => setDisposalReason(e.target.value)}
-                        />
+                        <Input placeholder="Укажите причину..." className="h-12 sm:h-14" value={disposalReason} onChange={(e) => setDisposalReason(e.target.value)} />
                       </div>
-                      <Button 
-                        className="w-full h-12 sm:h-14 font-bold mt-2"
-                        onClick={handleDisposal}
-                        disabled={isLoading || !disposalQty}
-                      >
+                      <Button className="w-full h-12 sm:h-14 font-bold mt-2" onClick={handleDisposal} disabled={isLoading || !disposalQty}>
                         {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                         Подтвердить
                       </Button>
@@ -706,91 +615,38 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                         <h3 className="text-xl font-bold tracking-tight">Быстрый закуп</h3>
                         <p className="text-xs text-muted-foreground">Оформите поступление товара</p>
                     </div>
-                    
                     <div className="space-y-4">
                       <div className="space-y-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Количество</Label>
-                          <Input 
-                            autoFocus
-                            type="number" inputMode="decimal" step="0.001"
-                            className="h-12 sm:h-14 text-lg font-bold"
-                            placeholder="0.000"
-                            value={purchaseQty}
-                            onChange={(e) => setPurchaseQty(e.target.value.replace(',', '.'))}
-                          />
+                          <Input autoFocus type="number" inputMode="decimal" step="0.001" className="h-12 sm:h-14 text-lg font-bold" placeholder="0.000" value={purchaseQty} onChange={(e) => setPurchaseQty(e.target.value.replace(',', '.'))} />
                         </div>
-
                         <div className="space-y-3">
                           <div className="flex bg-muted p-1 rounded-lg">
-                            <button
-                              onClick={() => setPurchasePriceMode("unit")}
-                              className={cn(
-                                "flex-1 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
-                                purchasePriceMode === "unit" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              Цена за ед.
-                            </button>
-                            <button
-                              onClick={() => setPurchasePriceMode("total")}
-                              className={cn(
-                                "flex-1 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all",
-                                purchasePriceMode === "total" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              Общая сумма
-                            </button>
+                            <button onClick={() => setPurchasePriceMode("unit")} className={cn("flex-1 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all", purchasePriceMode === "unit" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}>Цена за ед.</button>
+                            <button onClick={() => setPurchasePriceMode("total")} className={cn("flex-1 py-2 sm:py-1.5 text-[10px] font-bold rounded-md transition-all", purchasePriceMode === "total" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}>Общая сумма</button>
                           </div>
-
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">
-                              {purchasePriceMode === "unit" ? "Цена (₸)" : "Сумма (₸)"}
-                            </Label>
-                            <Input 
-                              type="number" inputMode="numeric"
-                              className="h-12 sm:h-14 text-lg font-bold"
-                              placeholder="0"
-                              value={purchasePrice}
-                              onChange={(e) => setPurchasePrice(e.target.value)}
-                            />
-                            {purchaseQty && purchasePrice && (
-                                <p className="text-[10px] text-muted-foreground font-medium text-right mt-1">
-                                    {purchasePriceMode === "total" 
-                                        ? `~ ${formatCurrency(parseFloat(purchasePrice) / parseFloat(purchaseQty))} / ${product.unit.toLowerCase()}`
-                                        : `Итого: ${formatCurrency(parseFloat(purchasePrice) * parseFloat(purchaseQty))}`
-                                    }
-                                </p>
-                            )}
+                            <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">{purchasePriceMode === "unit" ? "Цена (₸)" : "Сумма (₸)"}</Label>
+                            <Input type="number" inputMode="numeric" className="h-12 sm:h-14 text-lg font-bold" placeholder="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} />
                           </div>
                         </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Поставщик</Label>
-                        <Input 
-                          placeholder="Название компании"
-                          className="h-12 sm:h-14"
-                          value={purchaseSupplier}
-                          onChange={(e) => setPurchaseSupplier(e.target.value)}
-                        />
+                        <Input placeholder="Название компании" className="h-12 sm:h-14" value={purchaseSupplier} onChange={(e) => setPurchaseSupplier(e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-[10px] sm:text-xs font-semibold uppercase text-muted-foreground ml-1">Оплата</Label>
                         <Select value={purchasePaymentSource} onValueChange={(v: any) => setPurchasePaymentSource(v)}>
-                          <SelectTrigger className="h-12 sm:h-14">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="h-12 sm:h-14"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value={PaymentSource.BUSINESS_CASH}>Бизнес Касса</SelectItem>
                             <SelectItem value={PaymentSource.PERSONAL_FUNDS}>Личные средства</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button 
-                        className="w-full h-12 sm:h-14 font-bold mt-2"
-                        onClick={handlePurchase}
-                        disabled={isLoading || !purchaseQty || !purchasePrice}
-                      >
+                      <Button className="w-full h-12 sm:h-14 font-bold mt-2" onClick={handlePurchase} disabled={isLoading || !purchaseQty || !purchasePrice}>
                         {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                         Подтвердить закуп
                       </Button>
@@ -799,15 +655,9 @@ export function ProductActionDialog({ product, open, onOpenChange, initialBatch 
                 )}
               </div>
             </ScrollArea>
-            
             <div className="p-4 border-t bg-muted/5 flex items-center justify-between text-[10px] text-muted-foreground font-medium">
-              <div className="flex items-center gap-1.5 uppercase tracking-wider">
-                <Info className="w-3 h-3" />
-                <span>Сити Хан v2</span>
-              </div>
-              <div>
-                Остаток: <span className="font-bold text-foreground">{formatUnit(Number(product.currentStock), product.unit)}</span>
-              </div>
+              <div className="flex items-center gap-1.5 uppercase tracking-wider"><Info className="w-3 h-3" /><span>Сити Хан v2</span></div>
+              <div>Остаток: <span className="font-bold text-foreground">{formatUnit(Number(product.currentStock), product.unit)}</span></div>
             </div>
           </div>
         </div>
