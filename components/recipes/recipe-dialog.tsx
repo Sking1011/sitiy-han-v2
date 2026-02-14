@@ -168,15 +168,15 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 gap-0 max-sm:h-[100dvh] max-sm:max-h-none max-sm:rounded-none max-sm:top-0 max-sm:translate-y-0 border-none flex flex-col overflow-hidden">
+      <DialogContent className="max-w-4xl p-0 gap-0 h-[90vh] max-sm:h-[100dvh] max-sm:max-h-none max-sm:rounded-none border-none flex flex-col overflow-hidden">
         <DialogHeader className="p-4 border-b bg-card shrink-0">
           <DialogTitle>{recipe ? "Редактировать рецепт" : "Создать новый рецепт"}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-y-auto touch-pan-y p-4">
-              <div className="space-y-6 pb-40">
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -464,7 +464,7 @@ export function RecipeDialog({ open, onOpenChange, recipe, products, onSuccess }
                   </div>
                 </div>
               </div>
-            </div>
+            </ScrollArea>
 
             <DialogFooter className="p-4 border-t shrink-0 bg-card mt-auto flex-row gap-2">
               <Button type="button" variant="outline" className="flex-1 h-12" onClick={() => onOpenChange(false)}>

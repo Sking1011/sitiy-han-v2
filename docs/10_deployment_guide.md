@@ -37,18 +37,22 @@ docker compose up --build -d
 ```
 
 ## 4. Миграции Базы Данных (Prisma)
-**Важно:** Всегда указывайте версию `@6`, чтобы избежать конфликтов с новыми версиями Prisma CLI.
+**КРИТИЧЕСКИ ВАЖНО:** Никогда не используйте `npx prisma migrate dev` или `npx prisma migrate reset` на сервере. Эти команды **удаляют все данные**.
 
+Для продакшена используйте только:
 ```bash
-# Применение новых миграций
+# Применение новых миграций БЕЗ удаления данных
 docker compose exec app npx prisma@6 migrate deploy
+```
 
-# Если возник конфликт истории миграций (уже существует тип/таблица):
-docker compose exec app npx prisma@6 migrate resolve --applied <migration_name>
+### Если нужно добавить начальные данные (Seed) без удаления старых:
+По умолчанию `prisma db seed` может вызвать конфликт или сброс, если скрипт `seed.ts` не учитывает существующие записи. Если вы уверены в скрипте:
+```bash
+docker compose exec app npx prisma db seed
 ```
 
 ## 5. Перенос данных (Backup/Restore)
-
+Всегда делайте бэкап перед обновлением миграций!
 ### Экспорт с локальной машины:
 ```bash
 docker exec -t <container_name> pg_dump -U postgres sitiy_han > backup.sql

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Product, Category } from "@prisma/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +40,33 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
   const [actionBatch, setActionBatch] = useState<any | null>(null)
   const [activeTab, setActiveTab] = useState("raw")
 
+  const rawProducts = products.filter(p => !p.category.isFinished)
+  const finishedProducts = products.filter(p => p.category.isFinished)
+  
+  // Автоматическое переключение вкладки при фильтрации
+  useEffect(() => {
+    if (rawProducts.length === 0 && finishedProducts.length > 0 && activeTab === "raw") {
+      setActiveTab("finished")
+    }
+  }, [rawProducts.length, finishedProducts.length])
+
+  // Разворачиваем партии готовой продукции в отдельные карточки + добавляем товары без партий
+  const finishedDisplayItems = finishedProducts.flatMap(p => {
+    if (p.batches.length === 0) {
+      return [{ 
+        id: `empty-${p.id}`, 
+        product: p, 
+        isPlaceholder: true, 
+        remainingQuantity: 0, 
+        pricePerUnit: p.averagePurchasePrice, 
+        date: p.createdAt, 
+        performer: "Нет данных",
+        info: "Ожидает производства"
+      }];
+    }
+    return p.batches.map(b => ({ ...b, product: p }));
+  })
+
   const handleEdit = (product: Product) => {
     setSelectedProduct(product)
     setIsDialogOpen(true)
@@ -58,13 +85,6 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
     }
   }
 
-  const rawProducts = products.filter(p => !p.category.isFinished)
-  
-  // Разворачиваем партии готовой продукции в отдельные карточки
-  const finishedBatches = products
-    .filter(p => p.category.isFinished)
-    .flatMap(p => p.batches.map(b => ({ ...b, product: p })))
-
   const ProductCard = ({ product, isFinished, batch }: { product: ProductWithData, isFinished: boolean, batch?: any }) => {
       const current = batch ? Number(batch.remainingQuantity) : Number(product.currentStock);
       const min = Number(product.minStock);
@@ -78,7 +98,7 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
       const marginPercent = costPrice > 0 ? (margin / costPrice) * 100 : 0;
 
       return (
-        <Card className={`overflow-hidden transition-all hover:shadow-md flex flex-col ${isLow ? 'border-destructive/50 bg-destructive/5' : ''} ${batch ? 'border-primary/20 bg-primary/[0.02]' : ''}`}>
+        <Card className={`overflow-hidden transition-all hover:shadow-md flex flex-col ${isLow ? 'border-destructive/50 bg-destructive/5' : ''} ${batch && !batch.isPlaceholder ? 'border-primary/20 bg-primary/[0.02]' : ''}`}>
           <CardHeader className="p-4 pb-2 space-y-0">
             <div className="flex justify-between items-start mb-1">
               <Badge 
@@ -93,7 +113,7 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
                 {product.category.name}
               </Badge>
               
-              {batch ? (
+              {batch && !batch.isPlaceholder ? (
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight opacity-70">
                     ID #{batch.id.slice(0, 8)}
                 </span>
@@ -114,16 +134,18 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
                     <div className="flex flex-col gap-0.5 mt-2 font-normal">
                         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                             <Calendar className="h-3 w-3" /> 
-                            <span>Дата: {new Date(batch.date).toLocaleDateString('ru-RU')}</span>
+                            <span>Дата: {batch.date ? new Date(batch.date).toLocaleDateString('ru-RU') : '—'}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                             <TrendingUp className="h-3 w-3 rotate-90" /> 
                             <span>Оператор: {batch.performer}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold">
-                            <TrendingUp className="h-3 w-3" /> 
-                            <span>Прибыль: {formatCurrency(margin)} ({marginPercent.toFixed(0)}%)</span>
-                        </div>
+                        {batch && !batch.isPlaceholder && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold">
+                                <TrendingUp className="h-3 w-3" /> 
+                                <span>Прибыль: {formatCurrency(margin)} ({marginPercent.toFixed(0)}%)</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </CardTitle>
@@ -184,9 +206,10 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
             <Button 
                 variant="secondary" 
                 className="w-full h-10 text-xs font-bold gap-2 mt-3 rounded-xl shadow-sm"
+                disabled={batch?.isPlaceholder}
                 onClick={() => handleShowAction(product, batch)}
             >
-                Действие <ArrowUpRight className="h-4 w-4" />
+                {batch?.isPlaceholder ? "Нет в наличии" : "Действие"} <ArrowUpRight className="h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
@@ -212,7 +235,7 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
         
         <TabsContent value="finished">
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {finishedBatches.map(batchData => (
+                {finishedDisplayItems.map(batchData => (
                     <ProductCard 
                         key={batchData.id} 
                         product={batchData.product} 
@@ -220,7 +243,7 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
                         batch={batchData} 
                     />
                 ))}
-                {finishedBatches.length === 0 && <p className="text-muted-foreground text-sm col-span-full text-center py-10">Готовой продукции пока нет. Создайте варку на странице производства.</p>}
+                {finishedDisplayItems.length === 0 && <p className="text-muted-foreground text-sm col-span-full text-center py-10">Готовой продукции пока нет. Создайте варку на странице производства.</p>}
             </div>
         </TabsContent>
       </Tabs>
@@ -241,4 +264,3 @@ export function ProductGridClient({ products, categories }: ProductGridClientPro
     </>
   )
 }
-

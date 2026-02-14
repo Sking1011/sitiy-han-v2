@@ -28,19 +28,32 @@ async function main() {
     { name: 'Мясо', color: '#FF4500' },  // OrangeRed
     { name: 'Специи', color: '#8B4513' }, // SaddleBrown
     { name: 'Упаковка', color: '#4682B4' }, // SteelBlue
-    { name: 'Готовая продукция', color: '#32CD32' }, // LimeGreen
+    { name: 'Готовая продукция', color: '#32CD32', isFinished: true }, // LimeGreen
   ]
 
   for (const cat of stockCategories) {
-    await prisma.category.upsert({
-      where: { id: `stock-${cat.name}` }, // We don't have a unique constraint on name, so we use a custom ID for seeding or just findFirst
-      update: {},
-      create: {
-        name: cat.name,
-        color: cat.color,
-        type: CategoryType.STOCK,
-      },
+    const existing = await prisma.category.findFirst({
+      where: { name: cat.name, type: CategoryType.STOCK }
     })
+    
+    if (existing) {
+      await prisma.category.update({
+        where: { id: existing.id },
+        data: {
+          color: cat.color,
+          isFinished: (cat as any).isFinished || false,
+        }
+      })
+    } else {
+      await prisma.category.create({
+        data: {
+          name: cat.name,
+          color: cat.color,
+          type: CategoryType.STOCK,
+          isFinished: (cat as any).isFinished || false,
+        },
+      })
+    }
   }
 
   // 3. Create Expense Categories
@@ -52,15 +65,24 @@ async function main() {
   ]
 
   for (const cat of expenseCategories) {
-    await prisma.category.upsert({
-      where: { id: `expense-${cat.name}` },
-      update: {},
-      create: {
-        name: cat.name,
-        color: cat.color,
-        type: CategoryType.EXPENSE,
-      },
+    const existing = await prisma.category.findFirst({
+      where: { name: cat.name, type: CategoryType.EXPENSE }
     })
+    
+    if (existing) {
+      await prisma.category.update({
+        where: { id: existing.id },
+        data: { color: cat.color }
+      })
+    } else {
+      await prisma.category.create({
+        data: {
+          name: cat.name,
+          color: cat.color,
+          type: CategoryType.EXPENSE,
+        },
+      })
+    }
   }
 
   console.log('Base categories created')
