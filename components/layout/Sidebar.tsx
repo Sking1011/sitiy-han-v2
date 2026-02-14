@@ -17,7 +17,8 @@ import {
   User,
   PlusCircle,
   BarChart3,
-  Factory
+  Factory,
+  BookOpen
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -73,6 +74,12 @@ const navItems: NavItem[] = [
     href: "/accounting",
     icon: BarChart3,
     roles: [Role.ADMIN, Role.DIRECTOR, Role.ACCOUNTANT],
+  },
+  {
+    title: "Справочник",
+    href: "/wiki",
+    icon: BookOpen,
+    roles: [Role.ADMIN, Role.DIRECTOR, Role.ACCOUNTANT, Role.OPERATOR],
   },
   {
     title: "Журнал действий",

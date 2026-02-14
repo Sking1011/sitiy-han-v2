@@ -25,6 +25,7 @@ import {
 import { Search, Loader2, ShoppingCart, X } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/formatters"
+import { toast } from "sonner"
 
 export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, onOpenChange: (o: boolean) => void }) {
   const [step, setStep] = useState(1) // 1: Search/Select, 2: Details
@@ -99,8 +100,10 @@ export function QuickProcurementDialog({ open, onOpenChange }: { open: boolean, 
       })
       handleReset()
       onOpenChange(false)
-    } catch (err) {
+      toast.success("Закуп успешно оформлен")
+    } catch (err: any) {
       console.error(err)
+      toast.error(err.message || "Ошибка при создании закупа")
     } finally {
       setIsLoading(false)
     }

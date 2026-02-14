@@ -218,6 +218,11 @@ model ProductionMaterial {
   batchId      String?
   batch        Batch?     @relation(fields: [batchId], references: [id])
   quantityUsed Decimal    @db.Decimal(10, 3)
+
+  // Economic tracking
+  priceAtMoment Decimal? @db.Decimal(10, 2) // Средняя цена списания за единицу
+  totalCost     Decimal? @db.Decimal(12, 2) // Общая стоимость (сумма по партиям)
+  details       String?                     // JSON с разбивкой по партиям: [{batchId, qty, price}, ...]
 }
 
 model Sale {
@@ -269,14 +274,19 @@ model AuditLog {
 }
 
 model Disposal {
-  id          String   @id @default(uuid())
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  batchId     String?
-  batch       Batch?   @relation(fields: [batchId], references: [id])
-  quantity    Decimal  @db.Decimal(10, 3)
-  reason      String?
-  date        DateTime @default(now())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(uuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchId      String?
+  batch        Batch?   @relation(fields: [batchId], references: [id])
+  quantity     Decimal  @db.Decimal(10, 3)
+  reason       String?
+  date         DateTime @default(now())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  
+  // Economic tracking
+  totalCost    Decimal? @db.Decimal(12, 2) // Общая стоимость списания
+  pricePerUnit Decimal? @db.Decimal(10, 2) // Цена за единицу (справочно)
+  details      String?                     // JSON с разбивкой: [{batchId, qty, price}, ...]
 }

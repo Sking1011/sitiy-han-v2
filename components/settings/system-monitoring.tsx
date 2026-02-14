@@ -4,15 +4,47 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { Activity, Server, Database, HardDrive, Clock } from "lucide-react"
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table"
+import { 
+  Activity, 
+  Server, 
+  Database, 
+  HardDrive, 
+  Clock, 
+  User as UserIcon,
+  Search,
+  AlertCircle
+} from "lucide-react"
 import { format } from "date-fns"
 import { ru } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+import { useState } from "react"
+import { Input } from "@/components/ui/input"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 interface SystemMonitoringProps {
   logs: any[]
 }
 
+const ACTION_MAP: Record<string, { label: string, color: string }> = {
+  "DISPOSAL_CREATED": { label: "Списание", color: "bg-red-500 hover:bg-red-600" },
+  "PROCUREMENT_ITEM": { label: "Закуп", color: "bg-blue-500 hover:bg-blue-600" },
+  "USER_LOGIN": { label: "Вход", color: "bg-green-500 hover:bg-green-600" },
+  "PRODUCTION_CREATED": { label: "Производство", color: "bg-orange-500 hover:bg-orange-600" },
+  "PRODUCTION_COMPLETED": { label: "Выпуск", color: "bg-primary hover:bg-primary/90" },
+  "SALE_CREATED": { label: "Продажа", color: "bg-green-600 hover:bg-green-700" },
+}
+
 export function SystemMonitoring({ logs }: SystemMonitoringProps) {
+  const [searchTerm, setSearchTerm] = useState("")
+
   const systemMetrics = [
     { name: "Загрузка CPU", value: 15, icon: Activity },
     { name: "Память", value: 42, icon: Server },
@@ -20,9 +52,41 @@ export function SystemMonitoring({ logs }: SystemMonitoringProps) {
     { name: "Диск", value: 28, icon: HardDrive },
   ]
 
+  const formatDetails = (details: string | null) => {
+    if (!details) return "—";
+    try {
+      const parsed = JSON.parse(details);
+      // Если это массив (например, список списаний из deductStock)
+      if (Array.isArray(parsed)) {
+         return `Позиций: ${parsed.length}`;
+      }
+      // Если объект
+      if (typeof parsed === 'object') {
+         // Пытаемся сформировать читаемую строку
+         const parts = [];
+         if (parsed.productId) parts.push(`Товар ID: ...${parsed.productId.slice(-4)}`);
+         if (parsed.productName) parts.push(parsed.productName);
+         if (parsed.quantity) parts.push(`${parsed.quantity} ед.`);
+         if (parsed.totalCost) parts.push(`Сумма: ${parsed.totalCost}`);
+         if (parsed.reason) parts.push(`"${parsed.reason}"`);
+         
+         return parts.length > 0 ? parts.join(", ") : JSON.stringify(parsed);
+      }
+      return JSON.stringify(parsed);
+    } catch (e) {
+      return details;
+    }
+  }
+
+  const filteredLogs = logs.filter(log => 
+    log.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (log.details && log.details.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   return (
     <div className="space-y-6 pb-20 md:pb-0">
-      {/* Metrics Grid - Horizontal scroll on mobile */}
+      {/* Metrics Grid */}
       <div className="flex gap-4 overflow-x-auto pb-4 md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible scrollbar-hide">
         {systemMetrics.map((metric) => (
           <Card key={metric.name} className="min-w-[200px] flex-shrink-0 md:min-w-0">
@@ -39,44 +103,81 @@ export function SystemMonitoring({ logs }: SystemMonitoringProps) {
       </div>
 
       <Card className="border-none shadow-none md:border md:shadow-sm">
-        <CardHeader className="px-0 md:px-6">
-          <CardTitle className="text-lg md:text-xl flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            Логи аудита
-          </CardTitle>
-          <CardDescription>Последние действия пользователей в системе</CardDescription>
+        <CardHeader className="px-0 md:px-6 flex flex-row items-center justify-between space-y-0">
+            <div className="space-y-1">
+                <CardTitle className="text-lg md:text-xl flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-primary" />
+                    Логи аудита
+                </CardTitle>
+                <CardDescription>Последние действия пользователей в системе</CardDescription>
+            </div>
+            <div className="relative w-[200px] hidden md:block">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Поиск..." 
+                    className="pl-8 h-9" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
         </CardHeader>
         <CardContent className="px-0 md:px-6">
-          <ScrollArea className="h-[500px] w-full rounded-md border p-0 md:p-4">
-            <div className="divide-y">
-              {logs.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12">Логов пока нет</div>
-              ) : (
-                logs.map((log) => (
-                  <div key={log.id} className="p-4 hover:bg-muted/50 transition-colors">
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="secondary" className="font-normal text-[10px] md:text-xs">
-                          {log.user?.name || "Система"}
-                        </Badge>
-                        <span className="text-muted-foreground text-[10px] md:text-xs font-mono">
-                          {format(new Date(log.timestamp), "HH:mm:ss, d MMM", { locale: ru })}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-sm text-foreground">{log.action}</span>
-                        {log.details && (
-                          <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded mt-1 overflow-x-auto font-mono">
-                            {log.details}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+                <TableHeader className="bg-muted/50">
+                    <TableRow>
+                        <TableHead className="w-[140px]">Время</TableHead>
+                        <TableHead className="w-[180px]">Пользователь</TableHead>
+                        <TableHead className="w-[120px]">Действие</TableHead>
+                        <TableHead>Детали</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {filteredLogs.length === 0 ? (
+                        <TableRow>
+                            <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                Действий не найдено
+                            </TableCell>
+                        </TableRow>
+                    ) : (
+                        filteredLogs.map((log) => {
+                            const actionInfo = ACTION_MAP[log.action] || { label: log.action, color: "bg-slate-500" };
+                            
+                            return (
+                                <TableRow key={log.id} className="group">
+                                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                        {format(new Date(log.timestamp), "dd.MM.yy HH:mm", { locale: ru })}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <Avatar className="h-6 w-6">
+                                                <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                                                    {log.user?.name?.slice(0,2).toUpperCase() || "SY"}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-medium leading-none">{log.user?.name || "Система"}</span>
+                                                <span className="text-[9px] text-muted-foreground">{log.user?.role || "SYSTEM"}</span>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge className={cn("text-[10px] font-normal pointer-events-none whitespace-nowrap", actionInfo.color)}>
+                                            {actionInfo.label}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="text-xs truncate max-w-[200px] md:max-w-[400px] lg:max-w-[600px] text-muted-foreground group-hover:text-foreground transition-colors" title={log.details}>
+                                            {formatDetails(log.details)}
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        })
+                    )}
+                </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

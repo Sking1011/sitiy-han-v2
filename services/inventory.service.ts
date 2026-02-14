@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CategoryType, Unit, Prisma } from "@prisma/client";
+import { AuditService } from "./audit.service";
 
 export class InventoryService {
   // --- Categories ---
@@ -129,11 +130,8 @@ export class InventoryService {
   }
 
   /**
-   * Централизованный метод списания запасов.
-   * Гарантирует синхронное обновление Product.currentStock и Batch.remainingQuantity.
-   * Поддерживает:
-   * 1. Списание с конкретной партии (если передан batchId)
-   * 2. Списание по FIFO (если batchId не передан)
+   * Централизованный метод списания запасов (FIFO / Specific Batch).
+   * Возвращает детальную информацию о стоимости списанных материалов.
    */
   static async deductStock(tx: any, productId: string, quantity: number, specificBatchId?: string) {
       const product = await tx.product.findUnique({
@@ -144,12 +142,12 @@ export class InventoryService {
 
       const currentStock = Number(product.currentStock);
       
-      // Логируем, если уходим в минус, но не блокируем производство
+      // Логируем, если уходим в минус
       if (currentStock < quantity) {
           console.warn(`[StockWarning] Недостаточно товара "${product.name}" (Нужно: ${quantity}, Есть: ${currentStock}). Списание произведено в минус.`);
       }
 
-      // 1. Уменьшаем общий остаток товара (может стать отрицательным)
+      // 1. Уменьшаем общий остаток товара (всегда)
       await tx.product.update({
           where: { id: productId },
           data: {
@@ -157,9 +155,12 @@ export class InventoryService {
           },
       });
 
-      // 2. Списываем из партий
+      let totalCost = 0;
+      const deductedItems: { batchId: string | null; quantity: number; price: number }[] = [];
+
+      // 2. Логика списания с партий
       if (specificBatchId) {
-          // Строгое списание с партии
+          // --- СТРОГОЕ списание с конкретной партии ---
           const batch = await tx.batch.findUnique({ where: { id: specificBatchId } });
           if (!batch) throw new Error(`Партия ${specificBatchId} не найдена`);
           
@@ -167,19 +168,31 @@ export class InventoryService {
               throw new Error(`В партии недостаточно остатка (Нужно: ${quantity}, Есть: ${batch.remainingQuantity})`);
           }
 
+          const price = Number(batch.pricePerUnit);
+          totalCost = quantity * price;
+
+          deductedItems.push({
+              batchId: batch.id,
+              quantity: quantity,
+              price: price
+          });
+
           await tx.batch.update({
               where: { id: specificBatchId },
               data: { remainingQuantity: { decrement: new Prisma.Decimal(quantity) } }
           });
+
       } else {
-          // FIFO списание
+          // --- FIFO списание (автоматическое) ---
           let remainingToDeduct = quantity;
+          
+          // Берем активные партии (старые первыми)
           const activeBatches = await tx.batch.findMany({
               where: { 
                   productId: productId,
                   remainingQuantity: { gt: 0 }
               },
-              orderBy: { createdAt: 'asc' } // Старые партии первыми
+              orderBy: { createdAt: 'asc' }
           });
 
           for (const batch of activeBatches) {
@@ -187,6 +200,15 @@ export class InventoryService {
 
               const batchQty = Number(batch.remainingQuantity);
               const deductFromBatch = Math.min(batchQty, remainingToDeduct);
+              const price = Number(batch.pricePerUnit);
+
+              totalCost += deductFromBatch * price;
+              
+              deductedItems.push({
+                  batchId: batch.id,
+                  quantity: deductFromBatch,
+                  price: price
+              });
 
               await tx.batch.update({
                   where: { id: batch.id },
@@ -198,10 +220,33 @@ export class InventoryService {
               remainingToDeduct -= deductFromBatch;
           }
 
-          if (remainingToDeduct > 0.001) {
-              console.warn(`[StockWarning] Product ${product.name}: Stock deducted but batches were insufficient by ${remainingToDeduct}`);
+          // Если партий не хватило (ушли в минус)
+          if (remainingToDeduct > 0.00001) {
+              // Ищем цену последней закупки для оценки дефицита
+              const lastProcurementItem = await tx.procurementItem.findFirst({
+                  where: { productId },
+                  orderBy: { procurement: { date: 'desc' } },
+                  take: 1
+              });
+              
+              // Фоллбэк цена: последняя закупка -> средняя цена -> 0
+              const fallbackPrice = lastProcurementItem 
+                  ? Number(lastProcurementItem.pricePerUnit) 
+                  : (Number(product.averagePurchasePrice) || 0);
+
+              console.warn(`[StockDeficit] Product ${product.name}: Deficit of ${remainingToDeduct} deducted at estimated price ${fallbackPrice}`);
+
+              totalCost += remainingToDeduct * fallbackPrice;
+              
+              deductedItems.push({
+                  batchId: null, // Партии нет (воздух)
+                  quantity: remainingToDeduct,
+                  price: fallbackPrice
+              });
           }
       }
+
+      return { totalCost, items: deductedItems };
   }
 
   static async getLowStockProducts() {
@@ -537,6 +582,8 @@ export class InventoryService {
         date: d.date,
         type: "DISPOSAL" as const,
         quantity: -Number(d.quantity),
+        price: Number(d.pricePerUnit || 0), // Цена потери за единицу
+        total: Number(d.totalCost || 0),    // Общая сумма потери
         counterparty: d.reason || "Списание",
         performedBy: d.user.name,
         details: {
@@ -633,37 +680,42 @@ export class InventoryService {
     batchId?: string;
   }) {
     return prisma.$transaction(async (tx) => {
+      // 1. Используем умное списание для расчета стоимости и FIFO
+      const deductionResult = await InventoryService.deductStock(
+          tx, 
+          data.productId, 
+          data.quantity, 
+          data.batchId
+      );
+
+      const totalCost = deductionResult.totalCost;
+      const pricePerUnit = data.quantity > 0 ? totalCost / data.quantity : 0;
+
+      // 2. Создаем запись о списании с финансовыми данными
       const disposal = await tx.disposal.create({
         data: {
           productId: data.productId,
           batchId: data.batchId,
           quantity: new Prisma.Decimal(data.quantity),
           reason: data.reason,
-          userId: data.userId
+          userId: data.userId,
+          totalCost: new Prisma.Decimal(totalCost),
+          pricePerUnit: new Prisma.Decimal(pricePerUnit),
+          details: JSON.stringify(deductionResult.items)
         }
       });
 
-      // 1. Уменьшаем общий остаток товара
-      await tx.product.update({
-        where: { id: data.productId },
-        data: {
-          currentStock: {
-            decrement: new Prisma.Decimal(data.quantity)
+      // 3. Запись в журнал аудита
+      await AuditService.log(
+          data.userId,
+          "DISPOSAL_CREATED",
+          {
+              productId: data.productId,
+              quantity: data.quantity,
+              totalCost: totalCost,
+              reason: data.reason
           }
-        }
-      });
-
-      // 2. Если указана партия, уменьшаем её остаток
-      if (data.batchId) {
-          await tx.batch.update({
-              where: { id: data.batchId },
-              data: {
-                  remainingQuantity: {
-                      decrement: new Prisma.Decimal(data.quantity)
-                  }
-              }
-          });
-      }
+      );
 
       return disposal;
     });

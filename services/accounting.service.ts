@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PaymentSource, Unit } from "@prisma/client";
 
-export type TransactionType = "INCOME" | "EXPENSE" | "PROCUREMENT";
+export type TransactionType = "INCOME" | "EXPENSE" | "PROCUREMENT" | "DISPOSAL";
 
 export interface AccountingTransaction {
   id: string;
@@ -14,8 +14,9 @@ export interface AccountingTransaction {
   pricePerUnit?: number;
   totalAmount: number;
   counterparty?: string;
-  paymentSource: PaymentSource;
+  paymentSource?: PaymentSource | string;
   performedBy?: string;
+  description?: string;
 }
 
 export class AccountingService {
@@ -52,7 +53,7 @@ export class AccountingService {
     }
 
     // 1. Fetch Sales (Income)
-    const sales = await prisma.sale.findMany({
+    const salesPromise = prisma.sale.findMany({
       where: params?.type && params.type !== "INCOME" ? { id: "none" } : where,
       include: {
         user: { select: { name: true, username: true } },
@@ -68,7 +69,7 @@ export class AccountingService {
     });
 
     // 2. Fetch Procurements
-    const procurements = await prisma.procurement.findMany({
+    const procurementsPromise = prisma.procurement.findMany({
       where: params?.type && params.type !== "PROCUREMENT" ? { id: "none" } : where,
       include: {
         user: { select: { name: true, username: true } },
@@ -84,7 +85,7 @@ export class AccountingService {
     });
 
     // 3. Fetch General Expenses
-    const expenses = await prisma.expense.findMany({
+    const expensesPromise = prisma.expense.findMany({
       where: params?.type && params.type !== "EXPENSE" ? { id: "none" } : where,
       include: {
         user: { select: { name: true, username: true } },
@@ -93,10 +94,28 @@ export class AccountingService {
       orderBy: { date: "desc" }
     });
 
+    // 4. Fetch Disposals (Write-offs)
+    const disposalsPromise = prisma.disposal.findMany({
+        where: params?.type && params.type !== "DISPOSAL" ? { id: "none" } : where,
+        include: {
+            user: { select: { name: true, username: true } },
+            product: {
+                include: { category: true }
+            }
+        },
+        orderBy: { date: "desc" }
+    });
+
+    const [sales, procurements, expenses, disposals] = await Promise.all([
+        salesPromise, 
+        procurementsPromise, 
+        expensesPromise,
+        disposalsPromise
+    ]);
+
     const transactions: AccountingTransaction[] = [];
 
-    // Map Sales to Transactions (One transaction per sale item for detail, or per sale for summary)
-    // Here we do per sale item for maximum detail as requested
+    // Map Sales
     sales.forEach(sale => {
       sale.items.forEach(item => {
         transactions.push({
@@ -110,7 +129,7 @@ export class AccountingService {
           pricePerUnit: Number(item.pricePerUnit),
           totalAmount: Number(item.quantity) * Number(item.pricePerUnit),
           counterparty: sale.customer || "Розничный клиент",
-          paymentSource: "BUSINESS_CASH", // Sales usually go to cash
+          paymentSource: "BUSINESS_CASH",
           performedBy: sale.user?.name || sale.user?.username || "Система"
         });
       });
@@ -147,8 +166,28 @@ export class AccountingService {
         totalAmount: Number(exp.amount),
         counterparty: "Прочие расходы",
         paymentSource: exp.paymentSource,
-        performedBy: exp.user?.name || exp.user?.username || "Система"
+        performedBy: exp.user?.name || exp.user?.username || "Система",
+        description: exp.description || undefined
       });
+    });
+
+    // Map Disposals
+    disposals.forEach(disp => {
+        transactions.push({
+            id: disp.id,
+            date: disp.date,
+            type: "DISPOSAL",
+            categoryName: disp.product.category.name,
+            itemName: disp.product.name,
+            quantity: Number(disp.quantity),
+            unit: disp.product.unit,
+            pricePerUnit: Number(disp.pricePerUnit || 0),
+            totalAmount: Number(disp.totalCost || 0),
+            counterparty: "Списание (Убыток)",
+            paymentSource: "STOCK_LOSS", // Virtual source
+            performedBy: disp.user?.name || disp.user?.username || "Система",
+            description: disp.reason || "Списание со склада"
+        });
     });
 
     return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());

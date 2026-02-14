@@ -647,8 +647,15 @@ function ProductionForm({
           </div>
           <div className="space-y-4 pt-4 border-t">
             <div className="flex justify-between items-center p-4 rounded-xl bg-primary/5">
-                <span className="text-sm font-medium">Общие затраты:</span>
-                <span className="text-xl font-black text-primary">{formatCurrency(totalCost)}</span>
+                <span className="text-sm font-medium">
+                  Общие затраты 
+                  {!editingId || initialData?.status !== "COMPLETED" ? <span className="text-xs text-muted-foreground ml-1">(Прогноз)</span> : ""}
+                  :
+                </span>
+                <span className="text-xl font-black text-primary">
+                  {(!editingId || initialData?.status !== "COMPLETED") && "~"}
+                  {formatCurrency(totalCost)}
+                </span>
             </div>
             <div className="grid grid-cols-1 gap-2">
               <div className="p-4 rounded-xl bg-muted/50 flex justify-between items-center">
@@ -663,7 +670,10 @@ function ProductionForm({
                 </div>
                 <div className="p-4 rounded-xl bg-muted/50 space-y-1">
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wider font-bold"><Receipt className="w-3 h-3" /> Себестоимость</div>
-                    <div className="text-xl font-black truncate">{formatCurrency(costPerKg)}</div>
+                    <div className="text-xl font-black truncate">
+                      {(!editingId || initialData?.status !== "COMPLETED") && "~"}
+                      {formatCurrency(costPerKg)}
+                    </div>
                 </div>
             </div>
           </div>

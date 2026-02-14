@@ -38,7 +38,7 @@ export async function createUser(data: {
       data: {
         username: data.username,
         name: data.name,
-        email: data.email,
+        email: data.email && data.email.trim() !== "" ? data.email : null,
         passwordHash,
         role: data.role,
       },
@@ -59,14 +59,22 @@ export async function updateUser(id: string, data: {
   password?: string
 }) {
   try {
-    const updateData: any = { ...data }
+    const updateData: any = {}
     
-    if (updateData.password) {
-      updateData.passwordHash = await bcrypt.hash(updateData.password, 10)
+    if (data.username) updateData.username = data.username
+    if (data.name) updateData.name = data.name
+    if (data.role) updateData.role = data.role
+    
+    // Convert empty string to null to avoid Unique Constraint conflicts
+    if (data.email === "" || data.email === null) {
+      updateData.email = null
+    } else if (data.email) {
+      updateData.email = data.email
     }
     
-    // Always delete 'password' property as it doesn't exist in Prisma model
-    delete updateData.password
+    if (data.password && data.password.trim() !== "") {
+      updateData.passwordHash = await bcrypt.hash(data.password, 10)
+    }
 
     const user = await prisma.user.update({
       where: { id },

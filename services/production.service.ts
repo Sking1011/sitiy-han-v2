@@ -175,15 +175,57 @@ export class ProductionService {
 
   /**
    * Вспомогательный метод для обработки завершения производства:
-   * 1. Списание сырья (Product + Batches FIFO)
-   * 2. Приход готовой продукции (Product + New Batch)
+   * 1. Списание сырья (Product + Batches FIFO) с фиксацией точной стоимости.
+   * 2. Обновление ProductionMaterial (запись истории цен).
+   * 3. Пересчет себестоимости готовой продукции (ProductionItem).
+   * 4. Приход готовой продукции.
    */
   private static async processProductionCompletion(tx: any, production: any, materials: any[]) {
-      // 1. Списание сырья
+      let totalProductionCost = 0;
+
+      // 1. Списание сырья и фиксация затрат
       for (const mat of materials) {
           const qty = Number(mat.quantityUsed);
-          await InventoryService.deductStock(tx, mat.productId, qty, mat.batchId);
+          
+          // Выполняем списание и получаем точную стоимость
+          const deductionResult = await InventoryService.deductStock(tx, mat.productId, qty, mat.batchId);
+          
+          totalProductionCost += deductionResult.totalCost;
+
+          // Находим запись ProductionMaterial, чтобы обновить её
+          // (Если мы пришли из updateProduction, запись уже есть. Если из createProduction - тоже создана).
+          // Ищем по productionId и productId (предполагаем уникальность пары в рамках производства, 
+          // или же нам нужно передавать ID материала, если поддерживаем дубликаты. 
+          // Пока исходим из того, что materials - это агрегированный список).
+          
+          // В createProduction мы создали materials. Нам нужно найти их ID.
+          // Самый надежный способ - найти запись в БД.
+          const productionMaterial = await tx.productionMaterial.findFirst({
+              where: {
+                  productionId: production.id,
+                  productId: mat.productId
+              }
+          });
+
+          if (productionMaterial) {
+              const priceAtMoment = qty > 0 ? deductionResult.totalCost / qty : 0;
+              
+              await tx.productionMaterial.update({
+                  where: { id: productionMaterial.id },
+                  data: {
+                      totalCost: new Prisma.Decimal(deductionResult.totalCost),
+                      priceAtMoment: new Prisma.Decimal(priceAtMoment),
+                      details: JSON.stringify(deductionResult.items)
+                  }
+              });
+          }
       }
+
+      // Обновляем общую стоимость производства
+      await tx.production.update({
+          where: { id: production.id },
+          data: { totalCost: new Prisma.Decimal(totalProductionCost) }
+      });
 
       // 2. Приход готовой продукции
       for (const item of production.items) {
@@ -191,15 +233,28 @@ export class ProductionService {
           if (!product) continue;
 
           const producedQty = Number(item.quantityProduced);
-          const producedCost = Number(item.calculatedCostPerUnit);
+          
+          // ЧЕСТНАЯ СЕБЕСТОИМОСТЬ: Общие затраты / Общий выход
+          // Если продуктов несколько (побочные продукты), логика усложняется (нужно распределение).
+          // Пока считаем, что выход один или стоимость размазывается пропорционально (упрощение).
+          // В данной версии считаем, что весь Cost идет на основной продукт.
+          const realCostPerUnit = producedQty > 0 ? totalProductionCost / producedQty : 0;
+
+          // Обновляем запись ProductionItem реальной ценой
+          await tx.productionItem.update({
+              where: { id: item.id },
+              data: { calculatedCostPerUnit: new Prisma.Decimal(realCostPerUnit) }
+          });
 
           // Обновляем среднюю цену (справочно)
           const currentStock = Number(product.currentStock);
           const currentAvgPrice = Number(product.averagePurchasePrice);
-          let newAvgPrice = producedCost;
+          let newAvgPrice = realCostPerUnit;
           const totalQty = currentStock + producedQty;
+          
           if (totalQty > 0) {
-              newAvgPrice = ((currentStock * currentAvgPrice) + (producedQty * producedCost)) / totalQty;
+              // ВАЖНО: Формула скользящей средней учитывает новую реальную себестоимость
+              newAvgPrice = ((currentStock * currentAvgPrice) + (producedQty * realCostPerUnit)) / totalQty;
           }
 
           await tx.product.update({
@@ -211,14 +266,13 @@ export class ProductionService {
           });
 
           // Создаем уникальную Партию для этого выпуска
-          // Используем create, так как при переходе в COMPLETED партии еще не должно быть
           await tx.batch.create({
               data: {
                   productId: item.productId,
                   productionItemId: item.id,
                   initialQuantity: new Prisma.Decimal(producedQty),
                   remainingQuantity: new Prisma.Decimal(producedQty),
-                  pricePerUnit: new Prisma.Decimal(producedCost)
+                  pricePerUnit: new Prisma.Decimal(realCostPerUnit)
               }
           });
       }

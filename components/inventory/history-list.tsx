@@ -204,12 +204,27 @@ export function HistoryList({ history, productUnit }: HistoryListProps) {
                             )}
 
                             {item.type === "DISPOSAL" && (
-                                <div className="p-3 rounded-lg bg-red-50/50 border border-red-100 space-y-1">
-                                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-widest">Причина списания</p>
-                                    <p className="text-sm font-semibold text-red-700 italic">"{item.details.reason || "Причина не указана"}"</p>
-                                    {item.details.batchId && (
-                                        <p className="text-[9px] text-red-500 font-medium pt-1 uppercase">Партия: #{item.details.batchId.slice(0,8)}</p>
-                                    )}
+                                <div className="space-y-4">
+                                    <div className="p-3 rounded-lg bg-background border space-y-1">
+                                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Причина списания</p>
+                                        <p className="text-sm font-semibold italic">"{item.details.reason || "Причина не указана"}"</p>
+                                        {item.details.batchId && (
+                                            <p className="text-[10px] text-muted-foreground font-medium pt-1 uppercase flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                                                Партия: #{item.details.batchId.slice(0,8)}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-3 border rounded-lg bg-background">
+                                            <p className="text-[10px] text-muted-foreground uppercase font-bold">Убыток (Сумма)</p>
+                                            <p className="text-sm font-black text-red-600">{formatCurrency(item.total)}</p>
+                                        </div>
+                                        <div className="p-3 border rounded-lg bg-background">
+                                            <p className="text-[10px] text-muted-foreground uppercase font-bold">Цена потери</p>
+                                            <p className="text-sm font-bold text-red-600">{formatCurrency(item.price)} / {productUnit.toLowerCase()}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

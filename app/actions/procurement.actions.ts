@@ -15,6 +15,16 @@ export async function createBulkProcurementAction(data: {
     pricePerUnit: number
   }[]
 }) {
+  // Validate User Existence First
+  const userExists = await prisma.user.findUnique({
+    where: { id: data.userId },
+    select: { id: true }
+  });
+
+  if (!userExists) {
+    throw new Error("Пользователь не найден. Обновите страницу или войдите заново.");
+  }
+
   const totalAmount = data.items.reduce((sum, item) => sum + (item.quantity * item.pricePerUnit), 0)
 
   const result = await prisma.$transaction(async (tx) => {

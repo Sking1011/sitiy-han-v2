@@ -94,7 +94,9 @@ export function TransactionTable({ initialTransactions }: TransactionTableProps)
       case "PROCUREMENT":
         return <Badge className="bg-blue-500 hover:bg-blue-600">Закуп</Badge>
       case "EXPENSE":
-        return <Badge className="bg-red-500 hover:bg-red-600">Расход</Badge>
+        return <Badge className="bg-orange-500 hover:bg-orange-600">Расход</Badge>
+      case "DISPOSAL":
+        return <Badge variant="destructive">Списание</Badge>
     }
   }
 
@@ -124,6 +126,7 @@ export function TransactionTable({ initialTransactions }: TransactionTableProps)
               <SelectItem value="INCOME">Доходы</SelectItem>
               <SelectItem value="PROCUREMENT">Закупы</SelectItem>
               <SelectItem value="EXPENSE">Расходы</SelectItem>
+              <SelectItem value="DISPOSAL">Списания</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -186,7 +189,7 @@ export function TransactionTable({ initialTransactions }: TransactionTableProps)
                   <TableCell>{t.counterparty || "—"}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-[10px] uppercase">
-                      {t.paymentSource === "BUSINESS_CASH" ? "Касса" : "Личные"}
+                      {t.paymentSource === "BUSINESS_CASH" ? "Касса" : t.paymentSource === "STOCK_LOSS" ? "Склад (Потеря)" : "Личные"}
                     </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
