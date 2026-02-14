@@ -18,6 +18,9 @@ dist/
 .env.test.local
 .env.production.local
 
+# Sensitive Docs
+docs/10_deployment_guide.md
+
 # Debug logs
 npm-debug.log*
 yarn-debug.log*
